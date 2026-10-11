@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "9c3a3d631f0dc695",
+  "version": "1f12e9b2c0d3014f",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 45142,
-      "sha256": "039d58eebc0260785c77fe8644219889fccd600f4514574db021ac0bbd89352a"
+      "bytes": 44932,
+      "sha256": "033f78bf2c7ddcca35aebc652d1c5df20ab742587a62dd7310687de1e9b828ec"
     },
     {
       "path": "assets/audio/catalog.json",
