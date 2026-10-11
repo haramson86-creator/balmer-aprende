@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import {makePinHash,hash} from '../server/auth.mjs';
 import {validateWav,normalizeWav} from '../server/lesson-audio.mjs';
 import {handleAPI} from '../server/backend.mjs';
-import {generatePractices,validateLesson} from '../server/practice.mjs';
+import {generatePractices,validateLesson,letterCount,lessonQualityIssue} from '../server/practice.mjs';
 
 const exercise={type:'select',title:'Encuentra la M',prompt:'¿Cuál es la letra M?',options:['M','L','S'],answer:'M',category:'source',skill:'Reconocer letras'};
 
@@ -17,7 +17,7 @@ function fixture(exerciseCount=1){
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
   let voiceFailure=false;const voiceCalls=[];
-  const fetcher=async(url,options)=>{if(url.endsWith('/audio/speech')){voiceCalls.push(JSON.parse(options.body));return voiceFailure?new Response('quota',{status:429}):new Response(wavFixture(),{headers:{'Content-Type':'audio/wav'}});}calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:'')}))})}]}]})};
+  const fetcher=async(url,options)=>{if(JSON.parse(options.body).text?.format?.name==='reading_analysis')return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,pageSummary:'Reconocimiento de letras del cuaderno.',warnings:[],tasks:[{instruction:exercise.prompt,sourceText:'M L S',expectedAnswers:['M'],explanation:'La M aparece entre las opciones.',ambiguities:[]}]})}]}]});if(url.endsWith('/audio/speech')){voiceCalls.push(JSON.parse(options.body));return voiceFailure?new Response('quota',{status:429}):new Response(wavFixture(),{headers:{'Content-Type':'audio/wav'}});}calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:''),analysis:{objective:'Reconocer la letra M',sourceEvidence:'La página muestra M, L y S.',explanation:'La letra solicitada es M.',warnings:[],optionChecks:exercise.options.map(option=>({option,correct:option===exercise.answer,explanation:option===exercise.answer?'Es la letra solicitada.':'Es una letra diferente.'}))}}))})}]}]})};
   const parentCookies=new Map();
   const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,headers={},origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{...headers,Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
   const profile=async(user='family-a')=>(await request('profiles',{method:'POST',user,body:{name:'Perfil de prueba'}})).data;
@@ -321,4 +321,28 @@ test('legacy assigned task prepares audio once and edited instruction gets diffe
 test('WAV streaming sizes are finalized; empty, truncated and non-audio replies are rejected',()=>{
  const b=wavFixture();b.writeUInt32LE(0xffffffff,4);b.writeUInt32LE(0xffffffff,40);const bytes=b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength);normalizeWav(bytes);assert.equal(new DataView(bytes).getUint32(40,true),4800);validateWav(bytes);
  assert.throws(()=>validateWav(new ArrayBuffer(10)));assert.throws(()=>validateWav(new ArrayBuffer(100)));assert.throws(()=>validateWav(bytes.slice(0,100)));
+});
+
+test('letter comparisons reject ties, missing answers, wrong counts and equivalent options',()=>{
+ assert.equal(letterCount('Homero'),6);assert.equal(letterCount('Ismael'),6);assert.equal(letterCount('Omar'),4);assert.equal(letterCount('María'),5);
+ const tied={...exercise,title:'Nombre más largo',prompt:'¿Cuál de estos nombres es el más largo?',options:['Homero','Omar','Ismael'],answer:'Homero'};
+ assert.match(lessonQualityIssue(tied),/homero=6.*ismael=6/);assert.throws(()=>validateLesson(tied));
+ const fixed={...tied,prompt:'¿Qué nombre o grupo de nombres tiene la mayor cantidad de letras?',options:['Homero','Omar','Homero e Ismael'],answer:'Homero e Ismael'};assert.equal(validateLesson(fixed).answer,'Homero e Ismael');
+ assert.throws(()=>validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Omar'?",options:['3','5','6'],answer:'5'}));
+ assert.equal(validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Omar'?",options:['3','4','6'],answer:'4'}).answer,'4');
+ assert.throws(()=>validateLesson({...exercise,options:['M','m','L']}));
+});
+test('generation analyzes the source before a second review and preserves explanations',async()=>{
+ const f=fixture();try{const photo=(await f.upload()).data;const generated=await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}});assert.equal(generated.status,201);assert.equal(generated.data.drafts[0].analysis.optionChecks.length,3);assert.match(f.calls[0].body.input[0].content[0].text,/expectedAnswers/);
+ const child=await f.profile(),d=generated.data.drafts[0];const approved=await f.request('lessons/'+d.id,{method:'PATCH',body:{...d,reviewed:true,childId:child.id}});assert.equal(approved.data.lesson.analysis.verifiedBy,'analysis-and-independent-review-v1');
+ }finally{f.sqlite.close()}
+});
+test('legacy ambiguous tasks are withheld, cannot score, and parent correction preserves history',async()=>{
+ const f=fixture();try{const child=await f.profile(),photo=(await f.upload()).data,d=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];
+ const bad={...exercise,prompt:'¿Cuál de estos nombres es el más largo?',options:['Homero','Omar','Ismael'],answer:'Homero'};
+ f.sqlite.prepare("UPDATE lessons SET content=?,status='approved',child_id=? WHERE id=?").run(JSON.stringify(bad),child.id,d.id);
+ const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,0);assert.equal((await f.request('state')).data.libraryLessons[0].needsCorrection,true);
+ assert.equal((await f.request('attempts',{method:'POST',user:null,cookie,body:{id:crypto.randomUUID(),childId:child.id,activityId:d.id,activityRevision:1,answer:'Homero'}})).status,409);
+ const fixed={...bad,prompt:'¿Qué nombres tienen la mayor cantidad de letras?',options:['Homero','Omar','Homero e Ismael'],answer:'Homero e Ismael',revision:1,reviewed:true,childId:child.id};const saved=await f.request('lessons/'+d.id,{method:'PATCH',body:fixed});assert.equal(saved.status,200);assert.equal(saved.data.lesson.revision,2);assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,1);
+ }finally{f.sqlite.close()}
 });

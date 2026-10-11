@@ -1,4 +1,4 @@
-import {HttpError} from './practice.mjs';
+import {HttpError,lessonQualityIssue} from './practice.mjs';
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message)};
 export async function taskLifecycle(db,owner,path,method,body,actorId){
  const match=path.match(/^\/api\/(materials|lessons)\/([a-zA-Z0-9-]+)\/lifecycle$/);if(!match||method!=='PATCH')return null;
@@ -7,6 +7,7 @@ export async function taskLifecycle(db,owner,path,method,body,actorId){
  const stamp=new Date().toISOString();let entity=id;
  if(body.action==='rename'){check(table==='materials'&&typeof body.name==='string'&&body.name.trim().length>0&&body.name.trim().length<=70,400,'Escribe un título de hasta 70 caracteres.');await db.prepare('UPDATE materials SET name=? WHERE id=? AND owner=?').bind(body.name.trim(),id,owner).run();}
  else if(body.action==='repeat'){
+  check(!lessonQualityIssue(JSON.parse(record.content||'{}')),409,'Corrige la respuesta antes de repetir esta práctica.');
   check(table==='lessons'&&record.status==='approved',409,'Revisa y aprueba primero el ejercicio.');
   check(await db.prepare('SELECT id FROM profiles WHERE owner=? AND id=?').bind(owner,body.childId).first(),404,'Niño no encontrado.');
   check(await db.prepare('SELECT id FROM materials WHERE id=? AND owner=? AND archived_at IS NULL').bind(record.material_id,owner).first(),409,'Reactiva primero la foto de la biblioteca.');

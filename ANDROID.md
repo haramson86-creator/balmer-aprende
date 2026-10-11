@@ -51,3 +51,11 @@ Antes de asignar una página o aprobar un ejercicio, el servidor genera voz natu
 El padre puede escuchar antes de confirmar. Al pulsar Escuchar en una tarea antigua sin archivo, se prepara y conserva automáticamente. El reproductor permite pausar, repetir y avanzar. Las copias y nuevas prácticas reutilizan el audio cuando la consigna y opciones coinciden; una corrección genera un audio distinto. Se comprueba el acceso familiar e infantil en cada petición y se admiten solicitudes Range. La voz se identifica como generada por IA. Las prácticas familiares necesitan conexión para cargar su audio; no se promete descarga sin conexión.
 
 Validación 0.5.1: 44 pruebas, archivo real de OpenAI y decodificación/reproducción en navegador sin errores.
+
+## Análisis y revisión lógica de prácticas
+
+La generación realiza dos peticiones independientes: primero analiza consignas, evidencia, soluciones y ambigüedades de la foto; después revisa el análisis contra la misma imagen y construye opciones, solución y justificaciones. El resumen para el padre incluye objetivo, evidencia, explicación, comprobación de cada opción, advertencias y resumen de página. El esquema estructurado controla la forma; no prueba por sí solo que las respuestas sean correctas.
+
+Se aplican además controles deterministas sobre conteos de letras explícitos, comparaciones de longitud entre nombres/palabras y empates, y opciones equivalentes por mayúsculas o Unicode. Las contradicciones detectables en ejercicios anteriores se señalan al padre y se retiran temporalmente de las actividades del niño. El padre puede corregir una práctica aprobada: aumenta su revisión, conserva resultados anteriores y prepara audio nuevo. Estas comprobaciones cubren casos concretos; la revisión adulta sigue siendo necesaria para contenido general.
+
+Validación: 47 pruebas; análisis real del ejemplo Homero/Omar/Ismael devuelve Homero e Ismael como respuesta conjunta y explica 6/4/6 letras. No se modifican respuestas históricas automáticamente.
