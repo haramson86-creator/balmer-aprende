@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "1b6d9e6e5c35726d",
+  "version": "99b8cd2cfd2389cb",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 48616,
-      "sha256": "8ed5b0f7cbab60697ec2731ba2c9d5d76f12ced703880d6070ffadb33d6ff141"
+      "bytes": 48802,
+      "sha256": "90f091e1a7fd4e9836fce6e7d4cd130c617435288206ca9e978171931e23ecd6"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -124,8 +124,8 @@
     },
     {
       "path": "cloud.js",
-      "bytes": 27657,
-      "sha256": "db308f9558a0356ddebe2bfeaad68ccf9a00edcc3490a20ccf0ead1b8097cc14"
+      "bytes": 27561,
+      "sha256": "5c3edc8e090a54e6ff72932c0b776626ccc5c467deca53ac7dc9908507c44298"
     },
     {
       "path": "data.js",
@@ -136,6 +136,11 @@
       "path": "exercise-progress.js",
       "bytes": 840,
       "sha256": "b17b75d489ad1a1cd42d1d86eeffa434a575452b5e331f93b79357ca3993ea70"
+    },
+    {
+      "path": "family-notifications.js",
+      "bytes": 1706,
+      "sha256": "df515d95585ddd25de6dbf1244600b44032bbd0111b0b8229be773fa161a1b31"
     },
     {
       "path": "family-ui.js",
@@ -169,13 +174,18 @@
     },
     {
       "path": "styles.css",
-      "bytes": 51394,
-      "sha256": "75daf7650121fd26d3ffb72d4898693d5bc679041f297c9ca57261d00210fa77"
+      "bytes": 52435,
+      "sha256": "517c32573b1921e7ab6bc915e4f24fdedb1456ec6690c80c226b80d11816606f"
+    },
+    {
+      "path": "task-library.js",
+      "bytes": 6713,
+      "sha256": "e5864e36852b381ca7a5be0d59c5fa7181e9116c429e382c88d3a2070b152d08"
     },
     {
       "path": "version.js",
-      "bytes": 36,
-      "sha256": "69bd54e014f93b94dcc98a8ab7f8e8d4c07f97280fc6d106ccc558a10089c020"
+      "bytes": 35,
+      "sha256": "667cd92741d8d9f656f88cf452244b0361621d77f100c41e68d072ff41722b38"
     }
   ]
 }

@@ -7,17 +7,17 @@ import {handleAPI} from '../server/backend.mjs';
 import {generatePractices,validateLesson} from '../server/practice.mjs';
 
 const exercise={type:'select',title:'Encuentra la M',prompt:'¿Cuál es la letra M?',options:['M','L','S'],answer:'M',category:'source',skill:'Reconocer letras'};
-function fixture(){
+function fixture(exerciseCount=1){
   const sqlite=new DatabaseSync(':memory:');sqlite.exec(fs.readFileSync(new URL('../drizzle/0000_glorious_karen_page.sql',import.meta.url),'utf8'));
   for(const name of fs.readdirSync(new URL('../drizzle/',import.meta.url)).filter(n=>n.endsWith('.sql')&&!n.startsWith('0000')).sort())sqlite.exec(fs.readFileSync(new URL('../drizzle/'+name,import.meta.url),'utf8'));
   const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){const result=sqlite.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}}}}},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results}catch(e){sqlite.exec('ROLLBACK');throw e}}};
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
-  const fetcher=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:[exercise]})}]}]})};
+  const fetcher=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:'')}))})}]}]})};
   const parentCookies=new Map();
   const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
   const profile=async(user='family-a')=>(await request('profiles',{method:'POST',user,body:{name:'Perfil de prueba'}})).data;
-  const upload=async(user='family-a')=>{const photo=new FormData();photo.append('consent','yes');photo.append('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKXYAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'example.png');return request('materials',{method:'POST',body:photo,user})};
+  let uploadIndex=0;const upload=async(user='family-a',marker=++uploadIndex)=>{const photo=new FormData();photo.append('consent','yes');photo.append('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKXYAAAAASUVORK5CYII=','base64'),Uint8Array.of(marker)],{type:'image/png'}),'example.png');return request('materials',{method:'POST',body:photo,user})};
   return {sqlite,env,request,profile,upload,calls,objects};
 }
 
@@ -57,10 +57,10 @@ test('photo → draft → adult approval → child execution uses persisted isol
 test('missing key and rejected images do not invoke OpenAI or generate drafts',async()=>{const f=fixture();try{delete f.env.OPENAI_API_KEY;const photo=await f.upload();assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}})).status,503);assert.equal(f.calls.length,0);const form=new FormData();form.append('consent','yes');form.append('photo',new Blob(['not an image'],{type:'image/png'}),'fake.png');assert.equal((await f.request('materials',{method:'POST',body:form})).status,400);assert.equal((await f.request('state')).data.drafts.length,0)}finally{f.sqlite.close()}});
 
 test('multiple photos keep separate references and require exact parent summary confirmation',async()=>{
-  const f=fixture();try{
+  const f=fixture(2);try{
     const child=await f.profile(),otherChild=await f.profile('family-b');
     const photos=[(await f.upload()).data,(await f.upload()).data];
-    for(const photo of photos)for(let i=0;i<2;i++)assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).status,201);
+    for(const photo of photos)for(let i=0;i<2;i++)assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).status,i===0?201:200);
     const state=(await f.request('state')).data;
     assert.equal(state.materials.length,2);assert.ok(state.materials.every(m=>m.exerciseCount===2&&m.analysisStatus==='completed'));
     const first=state.drafts.filter(d=>d.sourceId===photos[0].id),second=state.drafts.filter(d=>d.sourceId===photos[1].id);
@@ -245,3 +245,38 @@ test('configured parent code is bound to trusted email and requires leaving chil
   assert.equal((await f.request('auth/parent/verify',{method:'POST',user:'family-b',body:{pin:'3579'}})).status,403);
  }finally{f.sqlite.close()}
 });
+test('library deduplicates photos and analysis, archives reversibly and repeats without erasing history',async()=>{
+ const f=fixture();try{
+  const child=await f.profile(),photo=await f.upload('family-a',7),duplicate=await f.upload('family-a',7);assert.equal(duplicate.status,200);assert.equal(duplicate.data.id,photo.data.id);assert.equal(f.objects.size,1);
+  f.sqlite.prepare('UPDATE materials SET content_hash=NULL WHERE id=?').run(photo.data.id);assert.equal((await f.upload('family-a',7)).data.id,photo.data.id);
+  const g=await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}});const draft=g.data.drafts[0];
+  assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}})).data.reused,true);assert.equal(f.calls.length,1);
+  const task=(await f.request('lessons/'+draft.id,{method:'PATCH',body:{...draft,childId:child.id,reviewed:true}})).data.lesson;
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  const result=await f.request('attempts',{method:'POST',user:null,cookie,body:{id:crypto.randomUUID(),childId:child.id,activityId:task.id,activityRevision:task.revision,answer:'M'}});assert.equal(result.status,200);
+  assert.equal((await f.request('materials/'+photo.data.id+'/lifecycle',{method:'PATCH',user:'family-b',body:{action:'archive'}})).status,404);
+  assert.equal((await f.request('materials/'+photo.data.id+'/lifecycle',{method:'PATCH',user:null,cookie,body:{action:'archive'}})).status,403);
+  await f.request('materials/'+photo.data.id+'/lifecycle',{method:'PATCH',body:{action:'rename',name:'Cuaderno de letras'}});
+  await f.request('materials/'+photo.data.id+'/lifecycle',{method:'PATCH',body:{action:'archive'}});
+  assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,0);const archived=(await f.request('state')).data;assert.equal(archived.libraryLessons[0].archived,true);assert.equal(archived.attempts.length,1);assert.equal(archived.materials[0].name,'Cuaderno de letras');
+  assert.equal((await f.request('attempts',{method:'POST',user:null,cookie,body:{id:crypto.randomUUID(),childId:child.id,activityId:task.id,activityRevision:task.revision,answer:'M'}})).status,404);
+  await f.request('materials/'+photo.data.id+'/lifecycle',{method:'PATCH',body:{action:'restore'}});assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,1);
+  await f.request('lessons/'+task.id+'/lifecycle',{method:'PATCH',body:{action:'archive'}});assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,0);
+  const repeat={action:'repeat',childId:child.id,id:crypto.randomUUID(),revision:task.revision};assert.equal((await f.request('lessons/'+task.id+'/lifecycle',{method:'PATCH',body:repeat})).status,200);assert.equal((await f.request('lessons/'+task.id+'/lifecycle',{method:'PATCH',body:repeat})).status,409);
+  const after=(await f.request('state')).data;assert.equal(after.libraryLessons.length,2);assert.equal(after.lessons.length,1);assert.equal(after.attempts.length,1);assert.ok(after.libraryLessons.every(t=>t.sourceId===photo.data.id));
+  await f.request('lessons/'+task.id+'/lifecycle',{method:'PATCH',body:{action:'restore'}});assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,2);
+ }finally{f.sqlite.close()}
+});
+test('child completion notifies shared parents, each read state is independent and private',async()=>{
+ const f=fixture();try{
+  await f.request('family',{method:'PUT',body:{name:'Familia de avisos'}});const child=await f.profile(),photo=(await f.upload()).data,draft=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];const task=(await f.request('lessons/'+draft.id,{method:'PATCH',body:{...draft,reviewed:true,childId:child.id}})).data.lesson;
+  const invite=(await f.request('family/invitations',{method:'POST',body:{email:'family-b@example.test'}})).data;await f.request('family/invitations/accept',{method:'POST',user:'family-b',body:{code:invite.code}});
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0],attemptId=crypto.randomUUID();
+  const body={id:attemptId,childId:child.id,activityId:task.id,activityRevision:task.revision,answer:'M'};await f.request('attempts',{method:'POST',user:null,cookie,body});await f.request('attempts',{method:'POST',user:null,cookie,body});
+  const a=(await f.request('state')).data,b=(await f.request('state',{user:'family-b'})).data;assert.equal(a.notifications.length,1);assert.equal(a.notifications[0].read,false);assert.equal(b.notifications[0].read,false);assert.equal(a.notifications[0].score,10);assert.equal((await f.request('state',{user:'family-c'})).data.notifications.length,0);assert.equal((await f.request('state',{user:null,cookie})).data.notifications,undefined);
+  await f.request('notifications/read',{method:'POST',user:'family-c',body:{ids:[attemptId]}});assert.equal((await f.request('state')).data.notifications[0].read,false);
+  await f.request('notifications/read',{method:'POST',body:{ids:[attemptId]}});assert.equal((await f.request('state')).data.notifications[0].read,true);assert.equal((await f.request('state',{user:'family-b'})).data.notifications[0].read,false);
+  assert.equal((await f.request('notifications/read',{method:'POST',user:null,cookie,body:{ids:[attemptId]}})).status,403);
+ }finally{f.sqlite.close()}
+});
+test('concurrent analysis requests for one photo invoke OpenAI at most once',async()=>{const f=fixture();try{await f.profile();const photo=(await f.upload()).data;const requests=await Promise.all([1,2].map(()=>f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})));assert.equal(requests.filter(r=>r.status===201).length,1);assert.ok(requests.every(r=>[200,201,409].includes(r.status)));assert.equal(f.calls.length,1);assert.equal((await f.request('state')).data.drafts.length,1)}finally{f.sqlite.close()}});

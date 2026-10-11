@@ -1,1 +1,1 @@
-64267032ad8b9f3eda03cfcb9572494f34105d3790b0b7ec41cc48f3bd1f4453  Balmer-Aprende-0.4.9.apk
+75bd3a499ea3df16995838092be672e7d9e7c9d62ef4e5acaa6b26251433ebf7  Balmer-Aprende-0.5.0.apk

@@ -1,3 +1,4 @@
+import {taskLifecycle} from './task-lifecycle.mjs';
 import {authRoute,createChildCode,parentStatus,initialPin,rememberedParent} from './auth.mjs';
 import {nativeAuth,nativeUser} from './native-auth.mjs';
 import {familyContext,familyRoute} from './family.mjs';
@@ -5,7 +6,7 @@ import {HttpError,validateLesson,validateImage,generatePractices} from './practi
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const id=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
-const sha=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
+const sha=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',value instanceof ArrayBuffer?value:new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message)};
 const row=(db,sql,...args)=>db.prepare(sql).bind(...args).first();
 const rows=async(db,sql,...args)=>(await db.prepare(sql).bind(...args).all()).results;
@@ -18,7 +19,7 @@ async function limitedBody(request,max=7*1024*1024){
   const bytes=new Uint8Array(length);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length}return bytes;
 }
 async function bodyJSON(request){try{return JSON.parse(new TextDecoder().decode(await limitedBody(request,16000)))}catch(e){if(e instanceof HttpError)throw e;throw new HttpError(400,'Solicitud no válida.');}}
-function viewLesson(r){return {...JSON.parse(r.content),id:r.id,status:r.status,revision:r.revision,sourceId:r.material_id,assignedTo:r.child_id?[r.child_id]:[],approvedAt:r.approved_at,cloud:true,color:'peach',art:'Aa',tag:r.status==='approved'?'Tarea revisada':'Borrador de IA'};}
+function viewLesson(r){return {...JSON.parse(r.content),id:r.id,status:r.status,revision:r.revision,sourceId:r.material_id,archived:!!(r.archived_at||r.photo_archived_at),assignedTo:r.child_id?[r.child_id]:[],approvedAt:r.approved_at,cloud:true,color:'peach',art:'Aa',tag:r.status==='approved'?'Tarea revisada':'Borrador de IA'};}
 async function actorFor(request,env,user){
   const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_child=([a-f0-9]{64})(?:;|$)/)?.[1];
   if(token){const session=await row(env.DB,'SELECT * FROM child_sessions WHERE token_hash=? AND expires_at>?',await sha(token),now());check(session,401,'El acceso del niño caducó. Pide un enlace nuevo.');return {owner:session.owner,role:'child',childId:session.child_id};}
@@ -52,16 +53,17 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     check(role!=='parent'||actor.unlocked,403,'Introduce tu código para entrar como padre.');
     if(path==='/api/state'&&method==='GET'){
       if(role==='parent')await cleanupPhotos(env,owner);
-      if(role==='child'){const lessons=await rows(env.DB,"SELECT * FROM lessons WHERE owner=? AND child_id=? AND status='approved' ORDER BY created_at DESC",owner,childId);const attempts=await rows(env.DB,'SELECT payload FROM attempts WHERE owner=? AND child_id=? ORDER BY created_at DESC LIMIT 1000',owner,childId);return json({materials:[],drafts:[],lessons:lessons.map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});}
-      const [materials,lessons,attempts]=await Promise.all([rows(env.DB,"SELECT id,name,mime,bytes,created_at,COALESCE((SELECT status FROM generations g WHERE g.material_id=materials.id AND g.owner=materials.owner ORDER BY g.created_at DESC LIMIT 1),'uploaded') AS analysisStatus FROM materials WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner),rows(env.DB,'SELECT * FROM lessons WHERE owner=? ORDER BY created_at DESC LIMIT 500',owner),rows(env.DB,'SELECT payload FROM attempts WHERE owner=? ORDER BY created_at DESC LIMIT 1000',owner)]);
+      if(role==='child'){const lessons=await rows(env.DB,"SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.owner=? AND l.child_id=? AND l.status='approved' AND l.archived_at IS NULL AND m.archived_at IS NULL ORDER BY l.created_at DESC",owner,childId);const attempts=await rows(env.DB,'SELECT payload FROM attempts WHERE owner=? AND child_id=? ORDER BY created_at DESC LIMIT 1000',owner,childId);return json({materials:[],drafts:[],lessons:lessons.map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});}
+      const [materials,lessons,attempts]=await Promise.all([rows(env.DB,"SELECT id,name,mime,bytes,created_at,archived_at,COALESCE((SELECT status FROM generations g WHERE g.material_id=materials.id AND g.owner=materials.owner ORDER BY g.created_at DESC LIMIT 1),'uploaded') AS analysisStatus FROM materials WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner),rows(env.DB,'SELECT l.*,m.archived_at AS photo_archived_at FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.owner=? ORDER BY l.created_at DESC LIMIT 500',owner),rows(env.DB,'SELECT payload FROM attempts WHERE owner=? ORDER BY created_at DESC LIMIT 1000',owner)]);
       const [members,invitations]=await Promise.all([rows(env.DB,'SELECT user_id AS id,email,created_at FROM family_members WHERE owner=? ORDER BY created_at',owner),actor.isFamilyOwner?rows(env.DB,'SELECT email,expires_at FROM family_invites WHERE owner=? AND expires_at>?',owner,now()):Promise.resolve([])]);
       const principal=await row(env.DB,'SELECT email FROM parent_access_sessions WHERE owner=? AND email IS NOT NULL ORDER BY created_at DESC LIMIT 1',owner);
-      return json({members:[{id:owner,email:principal?.email||'Administrador principal',isOwner:true},...members.map(m=>({...m,isOwner:false}))],invitations,materials:materials.map(m=>({...m,cloud:true,size:m.bytes,url:`/api/materials/${m.id}`,exerciseCount:lessons.filter(l=>l.material_id===m.id).length})),drafts:lessons.filter(l=>l.status==='draft').map(viewLesson),lessons:lessons.filter(l=>l.status==='approved').map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});
+      const read=await rows(env.DB,'SELECT attempt_id FROM notification_reads WHERE user_id=?',actor.userId);const seen=new Set(read.map(r=>r.attempt_id));
+      return json({notifications:attempts.map(a=>({...JSON.parse(a.payload),read:seen.has(JSON.parse(a.payload).id)})),members:[{id:owner,email:principal?.email||'Administrador principal',isOwner:true},...members.map(m=>({...m,isOwner:false}))],invitations,materials:materials.map(m=>({...m,archived:!!m.archived_at,cloud:true,size:m.bytes,url:`/api/materials/${m.id}`,exerciseCount:lessons.filter(l=>l.material_id===m.id).length})),libraryLessons:lessons.map(viewLesson),drafts:lessons.filter(l=>l.status==='draft'&&!l.archived_at&&!l.photo_archived_at).map(viewLesson),lessons:lessons.filter(l=>l.status==='approved'&&!l.archived_at&&!l.photo_archived_at).map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});
     }
     if(path==='/api/attempts'&&method==='POST'){
       const b=await bodyJSON(request);check(typeof b.id==='string'&&/^[a-zA-Z0-9-]{16,80}$/.test(b.id),400,'Identificador de intento no válido.');
       check(typeof b.childId==='string'&&(role==='parent'||b.childId===childId),403,'Perfil no autorizado.');
-      const lesson=await row(env.DB,"SELECT * FROM lessons WHERE id=? AND owner=? AND child_id=? AND status='approved'",b.activityId,owner,b.childId);check(lesson,404,'Práctica no asignada a este perfil.');
+      const lesson=await row(env.DB,"SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.id=? AND l.owner=? AND l.child_id=? AND l.status='approved' AND l.archived_at IS NULL AND m.archived_at IS NULL",b.activityId,owner,b.childId);check(lesson,404,'Práctica no asignada a este perfil.');
       check(b.activityRevision===lesson.revision,409,'La práctica cambió. Actualiza antes de continuar.');
       const content=JSON.parse(lesson.content);check(content.options.includes(b.answer),400,'Respuesta no válida.');
       const previous=await row(env.DB,'SELECT owner,child_id,lesson_id,payload FROM attempts WHERE id=?',b.id);if(previous){check(previous.owner===owner&&previous.child_id===b.childId&&previous.lesson_id===lesson.id&&JSON.parse(previous.payload).answer===b.answer,409,'El identificador del intento ya se usó.');return json({attempt:JSON.parse(previous.payload),acknowledged:true});}
@@ -74,7 +76,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     if(path==='/api/family'&&method==='DELETE'){
       check(actor.isFamilyOwner,403,'Solo quien creó la familia puede eliminarla.');
       const {confirmName}=await bodyJSON(request),family=await row(env.DB,'SELECT name FROM families WHERE owner=?',owner);check(family,404,'Familia no encontrada.');check(confirmName===family.name,400,'Escribe exactamente el nombre de la familia para eliminarla.');
-      const statements=[env.DB.prepare('INSERT OR IGNORE INTO deletion_queue(object_key,owner,created_at) SELECT object_key,owner,? FROM materials WHERE owner=?').bind(now(),owner)];
+      const statements=[env.DB.prepare('DELETE FROM notification_reads WHERE attempt_id IN (SELECT id FROM attempts WHERE owner=?)').bind(owner),env.DB.prepare('INSERT OR IGNORE INTO deletion_queue(object_key,owner,created_at) SELECT object_key,owner,? FROM materials WHERE owner=?').bind(now(),owner)];
       for(const table of ['attempts','lessons','generations','materials','child_sessions','child_codes','profiles','audit','family_members','family_invites','family_preferences','families'])statements.push(env.DB.prepare('DELETE FROM '+table+' WHERE owner=?').bind(owner));
       await env.DB.batch(statements);await cleanupPhotos(env,owner);const pending=await row(env.DB,'SELECT count(*) AS n FROM deletion_queue WHERE owner=?',owner);return json({ok:true,pendingPhotos:pending.n});
     }
@@ -96,14 +98,23 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       await env.DB.batch([env.DB.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),env.DB.prepare('INSERT INTO child_sessions(token_hash,owner,child_id,expires_at,created_at) VALUES(?,?,?,?,?)').bind(await sha(token),owner,childId,expires,now()),log('child.link.created',childId)]);return json({url:`${url.origin}/#child=${token}`,expiresAt:expires},201);
     }
     if(path==='/api/child/links'&&method==='DELETE'){const {childId}=await bodyJSON(request);await env.DB.batch([env.DB.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),env.DB.prepare('DELETE FROM child_codes WHERE owner=? AND child_id=?').bind(owner,childId)]);return json({ok:true});}
+    if(path.endsWith('/lifecycle')&&method==='PATCH'){const response=await taskLifecycle(env.DB,owner,path,method,await bodyJSON(request),actor.userId);if(response)return response;}
+    if(path==='/api/notifications/read'&&method==='POST'){
+      const b=await bodyJSON(request);check(Array.isArray(b.ids)&&b.ids.length>0&&b.ids.length<=100&&b.ids.every(x=>typeof x==='string'),400,'Selecciona las notificaciones.');
+      await env.DB.batch(b.ids.map(attemptId=>env.DB.prepare('INSERT INTO notification_reads(user_id,attempt_id,read_at) SELECT ?,id,? FROM attempts WHERE id=? AND owner=? ON CONFLICT(user_id,attempt_id) DO NOTHING').bind(actor.userId,now(),attemptId,owner)));return json({ok:true});
+    }
     if(path==='/api/materials'&&method==='POST'){
       check(env.BUCKET,503,'El almacenamiento de fotos aún no está configurado.');
-      const quota=await row(env.DB,'SELECT count(*) AS n FROM materials WHERE owner=?',owner);check(quota.n<100,429,'Límite de 100 fotos alcanzado. Retira una foto antes de añadir otra.');
       const bytes=await limitedBody(request),form=await new Response(bytes,{headers:{'Content-Type':request.headers.get('content-type')||''}}).formData(),photo=form.get('photo');
       check(photo&&typeof photo.arrayBuffer==='function',400,'Selecciona una foto.');check(form.get('consent')==='yes',400,'Confirma el envío de la página para generar prácticas.');
-      const image=await photo.arrayBuffer();validateImage(image,photo.type);const materialId=id(),key=`${await sha(owner)}/${materialId}`;
+      const image=await photo.arrayBuffer();validateImage(image,photo.type);const contentHash=await sha(image);
+      let duplicate=await row(env.DB,'SELECT id,name,archived_at FROM materials WHERE owner=? AND content_hash=?',owner,contentHash);
+      if(!duplicate){const legacy=await rows(env.DB,'SELECT id,name,object_key,archived_at FROM materials WHERE owner=? AND content_hash IS NULL AND bytes=?',owner,image.byteLength);for(const m of legacy){const old=await env.BUCKET.get(m.object_key);if(old&&await sha(await old.arrayBuffer())===contentHash){await run(env.DB,'UPDATE materials SET content_hash=? WHERE id=? AND owner=?',contentHash,m.id,owner);duplicate=m;break;}}}
+      if(duplicate)return json({...duplicate,reused:true,archived:!!duplicate.archived_at,url:'/api/materials/'+duplicate.id});
+      const quota=await row(env.DB,'SELECT count(*) AS n FROM materials WHERE owner=?',owner);check(quota.n<100,429,'Tu biblioteca admite hasta 100 fotos. Reutiliza las que ya guardaste.');
+      const materialId=id(),key=`${await sha(owner)}/${materialId}`;
       await env.BUCKET.put(key,image,{httpMetadata:{contentType:photo.type}});
-      try{await env.DB.batch([env.DB.prepare('INSERT INTO materials(id,owner,name,object_key,mime,bytes,created_at) VALUES(?,?,?,?,?,?,?)').bind(materialId,owner,'Página del cuaderno',key,photo.type,image.byteLength,now()),log('material.uploaded',materialId)])}catch(error){await env.BUCKET.delete(key);throw error;}
+      try{await env.DB.batch([env.DB.prepare('INSERT INTO materials(id,owner,name,object_key,mime,bytes,content_hash,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(materialId,owner,'Página del cuaderno',key,photo.type,image.byteLength,contentHash,now()),log('material.uploaded',materialId)])}catch(error){await env.BUCKET.delete(key);const existing=await row(env.DB,'SELECT id,name,archived_at FROM materials WHERE owner=? AND content_hash=?',owner,contentHash);if(existing)return json({...existing,reused:true,archived:!!existing.archived_at,url:'/api/materials/'+existing.id});throw error;}
       return json({id:materialId,name:'Página del cuaderno',cloud:true,size:image.byteLength,url:`/api/materials/${materialId}`},201);
     }
     const materialMatch=path.match(/^\/api\/materials\/([a-zA-Z0-9-]+)$/);
@@ -116,10 +127,13 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const b=await bodyJSON(request);check(b.consent===true,400,'Confirma el envío de la foto a OpenAI.');check(typeof b.id==='string'&&/^[a-zA-Z0-9-]{16,80}$/.test(b.id),400,'Identificador no válido.');
       const previous=await row(env.DB,'SELECT * FROM generations WHERE id=?',b.id);
       if(previous){check(previous.owner===owner&&previous.material_id===b.materialId,404,'Solicitud no encontrada.');if(previous.status==='completed')return json({drafts:(await rows(env.DB,'SELECT * FROM lessons WHERE generation_id=? AND owner=?',b.id,owner)).map(viewLesson)});throw new HttpError(409,previous.status==='running'?'La foto ya se está procesando.':'La generación falló. Inicia un nuevo intento.');}
-      const material=await row(env.DB,'SELECT * FROM materials WHERE id=? AND owner=?',b.materialId,owner);check(material,404,'Foto no encontrada.');
+      const material=await row(env.DB,'SELECT * FROM materials WHERE id=? AND owner=?',b.materialId,owner);check(material,404,'Foto no encontrada.');check(!material.archived_at,409,'Reactiva primero la foto de la biblioteca.');
+      const existing=await rows(env.DB,'SELECT * FROM lessons WHERE material_id=? AND owner=?',material.id,owner);if(existing.length)return json({reused:true,drafts:existing.filter(l=>l.status==='draft'&&!l.archived_at).map(viewLesson)});
+      await run(env.DB,"UPDATE generations SET status='failed' WHERE owner=? AND material_id=? AND status='running' AND created_at<?",owner,material.id,new Date(Date.now()-10*60000).toISOString());
+      check(!(await row(env.DB,"SELECT id FROM generations WHERE material_id=? AND owner=? AND status='running'",material.id,owner)),409,'La foto ya se está procesando.');
       const quota=await row(env.DB,'SELECT count(*) AS n FROM generations WHERE owner=? AND created_at>?',owner,new Date(Date.now()-86400000).toISOString());check(quota.n<20,429,'Alcanzaste el límite de 20 generaciones al día.');
       const object=await env.BUCKET?.get(material.object_key);check(object,404,'La foto no está disponible.');
-      const inserted=await run(env.DB,"INSERT INTO generations(id,owner,material_id,status,created_at) VALUES(?,?,?,'running',?) ON CONFLICT(id) DO NOTHING",b.id,owner,material.id,now());check(inserted.meta.changes===1,409,'La foto ya se está procesando.');
+      const inserted=await run(env.DB,"INSERT INTO generations(id,owner,material_id,status,created_at) SELECT ?,?,?,'running',? WHERE NOT EXISTS(SELECT 1 FROM generations WHERE owner=? AND material_id=? AND status='running') AND NOT EXISTS(SELECT 1 FROM lessons WHERE owner=? AND material_id=?) ON CONFLICT(id) DO NOTHING",b.id,owner,material.id,now(),owner,material.id,owner,material.id);check(inserted.meta.changes===1,409,'La foto ya se está procesando.');
       try{
         const exercises=await generatePractices({key:env.OPENAI_API_KEY,model:env.OPENAI_MODEL,image:await object.arrayBuffer(),mime:material.mime,fetcher});
         const drafts=exercises.map(content=>({id:id(),content,createdAt:now()}));
@@ -130,7 +144,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     if(path==='/api/lessons/confirm-photo'&&method==='POST'){
       const b=await bodyJSON(request);check(b.reviewed===true,400,'Revisa la foto y confirma el resumen de ejercicios.');
       check(Array.isArray(b.lessons)&&b.lessons.length>0&&b.lessons.length<=50,400,'Selecciona de 1 a 50 ejercicios para confirmar.');
-      check(await row(env.DB,'SELECT id FROM materials WHERE id=? AND owner=?',b.materialId,owner),404,'Foto no encontrada.');
+      check(await row(env.DB,'SELECT id FROM materials WHERE id=? AND owner=? AND archived_at IS NULL',b.materialId,owner),404,'Foto no encontrada o archivada.');
       check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
       const drafts=await rows(env.DB,"SELECT id,revision FROM lessons WHERE material_id=? AND owner=? AND status='draft'",b.materialId,owner);
       check(new Set(b.lessons.map(l=>l.id)).size===b.lessons.length&&drafts.length===b.lessons.length&&drafts.every(d=>b.lessons.some(l=>l.id===d.id&&l.revision===d.revision)),409,'El resumen cambió. Actualiza y revisa los ejercicios antes de confirmar.');
@@ -140,7 +154,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     const lessonMatch=path.match(/^\/api\/lessons\/([a-zA-Z0-9-]+)$/);
     if(lessonMatch&&method==='PATCH'){
       const b=await bodyJSON(request);check(b.reviewed===true,400,'Revisa y confirma la consigna y su respuesta.');const content=validateLesson(b);
-      const lesson=await row(env.DB,'SELECT * FROM lessons WHERE id=? AND owner=?',lessonMatch[1],owner);check(lesson,404,'Borrador no encontrado.');check(lesson.status==='draft'&&b.revision===lesson.revision,409,'El borrador ya cambió o fue aprobado. Actualiza la página.');
+      const lesson=await row(env.DB,'SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.id=? AND l.owner=? AND l.archived_at IS NULL AND m.archived_at IS NULL',lessonMatch[1],owner);check(lesson,404,'Borrador no encontrado o archivado.');check(lesson.status==='draft'&&b.revision===lesson.revision,409,'El borrador ya cambió o fue aprobado. Actualiza la página.');
       check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
       const approvedAt=now();const result=await run(env.DB,"UPDATE lessons SET content=?,child_id=?,status='approved',approved_at=?,revision=revision+1 WHERE id=? AND owner=? AND revision=? AND status='draft'",JSON.stringify(content),b.childId,approvedAt,lesson.id,owner,lesson.revision);check(result.meta.changes===1,409,'El borrador cambió durante la revisión.');await env.DB.batch([log('practice.approved',lesson.id)]);return json({lesson:viewLesson({...lesson,content:JSON.stringify(content),child_id:b.childId,status:'approved',approved_at:approvedAt,revision:lesson.revision+1})});
     }

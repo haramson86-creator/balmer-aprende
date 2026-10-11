@@ -2,9 +2,9 @@
 
 Desde 0.4.2 la app consulta la última versión estable de GitHub al abrirse (como máximo una vez por hora mientras el proceso siga activo). Si encuentra una versión superior, muestra «Actualizar» y «Más tarde». En el bloque Android del Site aparece «Buscar actualizaciones» cuando se abre dentro de una APK compatible. La descarga se realiza en segundo plano; se verifican tamaño, SHA-256 de GitHub, paquete, versionCode superior y mismo certificado de firma antes de abrir el instalador. Android requiere aprobación explícita de instalación y, la primera vez, permitir instalaciones desde Aprende. No hay instalaciones silenciosas. Las APK anteriores necesitan instalar 0.4.2 manualmente una vez para incorporar este mecanismo.
 
-Para validar detección sin publicar una versión ficticia, Gradle admite `-PaprendeVersionCode=2 -PaprendeVersionName=0.4.1` en una compilación QA local. Nunca subir esa salida como release; la distribución usa los valores predeterminados 10 / 0.4.9 y se conserva aparte antes de la prueba.
+Para validar detección sin publicar una versión ficticia, Gradle admite `-PaprendeVersionCode=2 -PaprendeVersionName=0.4.1` en una compilación QA local. Nunca subir esa salida como release; la distribución usa los valores predeterminados 11 / 0.5.0 y se conserva aparte antes de la prueba.
 
-Versión 0.4.9 (versionCode 10), paquete `com.balmer.aprende`, Android 7 o posterior.
+Versión 0.5.0 (versionCode 11), paquete `com.balmer.aprende`, Android 7 o posterior.
 
 La APK abre por HTTPS el Site publicado. Requiere Internet y utiliza su autenticación, base de datos y almacenamiento. No contiene claves de OpenAI ni una copia del servidor. OpenAI está configurado como secreto del servidor. El inicio guía a los padres para crear su familia, añadir niños y subir fotos; cada práctica requiere revisión y confirmación.
 
@@ -12,7 +12,7 @@ La APK abre por HTTPS el Site publicado. Requiere Internet y utiliza su autentic
 
 Instalar Node 22, JDK 21 y Android SDK 36. Ejecutar `npm ci`, `node node_modules/@capacitor/cli/bin/capacitor sync android` y, desde `android/`, `gradlew.bat assembleDebug` con `JAVA_HOME` y `ANDROID_HOME` configurados.
 
-La salida es `android/app/build/outputs/apk/debug/app-debug.apk`. El archivo distribuido se llama `Balmer-Aprende-0.4.9.apk`. Es una compilación de prueba firmada con clave debug, apta para instalación manual; no es una publicación de Google Play. Las futuras actualizaciones requieren conservar el certificado de firma, o desinstalar la versión anterior.
+La salida es `android/app/build/outputs/apk/debug/app-debug.apk`. El archivo distribuido se llama `Balmer-Aprende-0.5.0.apk`. Es una compilación de prueba firmada con clave debug, apta para instalación manual; no es una publicación de Google Play. Las futuras actualizaciones requieren conservar el certificado de firma, o desinstalar la versión anterior.
 
 El código Android y el código del Site se versionan juntos. Los APK y sus sumas SHA-256 se adjuntan a GitHub Releases; las claves, datos locales, SDK, dependencias y salidas de compilación se excluyen del repositorio.
 
@@ -31,4 +31,15 @@ Las pruebas automatizadas cubren sesión recordada, expiración y cierre; aislam
 
 
 Desde 0.4.9, las prácticas subidas permiten avanzar con «Siguiente ejercicio» sin volver al listado. La barra numerada permite elegir cualquier ejercicio asignado al niño y muestra Por empezar, En práctica o Logrado según sus resultados de la revisión actual. Al terminar el último ejercicio se puede repasar. Saltar un ejercicio no lo marca como terminado.
+
+
+## Biblioteca y notificaciones (0.5.0)
+
+Las fotos se conservan en la biblioteca familiar con sus ejercicios y resultados. El padre puede buscar, cambiar el título, consultar referencias e historial, archivar y reactivar fotos o ejercicios. Archivar no elimina datos y retira las tareas del niño hasta reactivarlas. Asignar nueva práctica reutiliza un ejercicio aprobado y su referencia con una tarea nueva para el mismo niño o un hermano, conservando la anterior.
+
+Se detectan fotos idénticas por SHA-256 de los bytes normalizados; no se usa reconocimiento visual para deduplicar fotos tomadas otra vez. Los análisis de fotos que ya tienen ejercicios se reutilizan, incluso ante solicitudes simultáneas. El análisis fallido puede reintentarse desde la foto guardada.
+
+Los resultados guardados generan avisos dentro de Aprende, visibles a los padres de la familia, con niño, actividad, resultado y fecha. Cada adulto marca sus propios avisos como leídos. La lista se consulta al abrir la app y se actualiza cada 30 segundos mientras está activa; no son notificaciones push de Android con la app cerrada. No requieren correo ni otro servicio.
+
+Versión actual: 0.5.0, versionCode 11. Compilación Android correcta y 40 pruebas de integración y componentes satisfactorias.
 
