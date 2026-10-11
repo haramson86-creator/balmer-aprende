@@ -3,22 +3,26 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
 import {makePinHash,hash} from '../server/auth.mjs';
+import {validateWav,normalizeWav} from '../server/lesson-audio.mjs';
 import {handleAPI} from '../server/backend.mjs';
 import {generatePractices,validateLesson} from '../server/practice.mjs';
 
 const exercise={type:'select',title:'Encuentra la M',prompt:'¿Cuál es la letra M?',options:['M','L','S'],answer:'M',category:'source',skill:'Reconocer letras'};
+
+function wavFixture(){const b=Buffer.alloc(4844);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(4800,40);return b;}
 function fixture(exerciseCount=1){
   const sqlite=new DatabaseSync(':memory:');sqlite.exec(fs.readFileSync(new URL('../drizzle/0000_glorious_karen_page.sql',import.meta.url),'utf8'));
   for(const name of fs.readdirSync(new URL('../drizzle/',import.meta.url)).filter(n=>n.endsWith('.sql')&&!n.startsWith('0000')).sort())sqlite.exec(fs.readFileSync(new URL('../drizzle/'+name,import.meta.url),'utf8'));
   const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){const result=sqlite.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}}}}},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results}catch(e){sqlite.exec('ROLLBACK');throw e}}};
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
-  const fetcher=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:'')}))})}]}]})};
+  let voiceFailure=false;const voiceCalls=[];
+  const fetcher=async(url,options)=>{if(url.endsWith('/audio/speech')){voiceCalls.push(JSON.parse(options.body));return voiceFailure?new Response('quota',{status:429}):new Response(wavFixture(),{headers:{'Content-Type':'audio/wav'}});}calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:'')}))})}]}]})};
   const parentCookies=new Map();
-  const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
+  const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,headers={},origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{...headers,Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
   const profile=async(user='family-a')=>(await request('profiles',{method:'POST',user,body:{name:'Perfil de prueba'}})).data;
   let uploadIndex=0;const upload=async(user='family-a',marker=++uploadIndex)=>{const photo=new FormData();photo.append('consent','yes');photo.append('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKXYAAAAASUVORK5CYII=','base64'),Uint8Array.of(marker)],{type:'image/png'}),'example.png');return request('materials',{method:'POST',body:photo,user})};
-  return {sqlite,env,request,profile,upload,calls,objects};
+  return {sqlite,env,request,profile,upload,calls,objects,voiceCalls,setVoiceFailure(value){voiceFailure=value}};
 }
 
 test('photo → draft → adult approval → child execution uses persisted isolated records',async()=>{
@@ -280,3 +284,41 @@ test('child completion notifies shared parents, each read state is independent a
  }finally{f.sqlite.close()}
 });
 test('concurrent analysis requests for one photo invoke OpenAI at most once',async()=>{const f=fixture();try{await f.profile();const photo=(await f.upload()).data;const requests=await Promise.all([1,2].map(()=>f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})));assert.equal(requests.filter(r=>r.status===201).length,1);assert.ok(requests.every(r=>[200,201,409].includes(r.status)));assert.equal(f.calls.length,1);assert.equal((await f.request('state')).data.drafts.length,1)}finally{f.sqlite.close()}});
+
+test('approved audio is persisted, private, range-compatible and reused across repeated tasks',async()=>{
+ const f=fixture();try{
+  const child=await f.profile(),sibling=await f.profile(),photo=(await f.upload()).data,draft=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];
+  const task=(await f.request('lessons/'+draft.id,{method:'PATCH',body:{...draft,reviewed:true,childId:child.id}})).data.lesson;assert.equal(task.audioReady,true);assert.equal(f.voiceCalls.length,1);assert.equal(f.voiceCalls[0].response_format,'wav');assert.ok(!f.voiceCalls[0].input.includes('correcta'));
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  const voice=await f.request('lessons/'+task.id+'/audio',{user:null,cookie});assert.equal(voice.status,200);assert.equal(voice.response.headers.get('Content-Type'),'audio/wav');validateWav(await voice.response.arrayBuffer());
+  const range=await f.request('lessons/'+task.id+'/audio',{user:null,cookie,headers:{Range:'bytes=0-43'}});assert.equal(range.status,206);assert.equal((await range.response.arrayBuffer()).byteLength,44);
+  assert.equal((await f.request('lessons/'+task.id+'/audio',{headers:{Range:'bytes=999999-'}})).status,416);
+  assert.equal((await f.request('lessons/'+task.id+'/audio',{user:'family-b'})).status,404);
+  const siblingLogin=await f.request('auth/child',{method:'POST',user:null,body:{code:sibling.code}});assert.equal((await f.request('lessons/'+task.id+'/audio',{user:null,cookie:siblingLogin.response.headers.get('Set-Cookie').split(';')[0]})).status,404);
+  const newId=crypto.randomUUID();await f.request('lessons/'+task.id+'/lifecycle',{method:'PATCH',body:{action:'repeat',revision:task.revision,id:newId,childId:child.id}});assert.equal((await f.request('lessons/'+newId+'/audio')).status,200);assert.equal(f.voiceCalls.length,1);
+  delete f.env.OPENAI_API_KEY;assert.equal((await f.request('lessons/'+task.id+'/audio',{method:'POST'})).status,200);
+ }finally{f.sqlite.close()}
+});
+test('audio failure blocks assignment without losing drafts and retry preserves reviewed content',async()=>{
+ const f=fixture(2);try{
+  const child=await f.profile(),photo=(await f.upload()).data,drafts=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts;
+  const body={materialId:photo.id,childId:child.id,reviewed:true,lessons:drafts.map(d=>({id:d.id,revision:d.revision}))};f.setVoiceFailure(true);
+  assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body})).status,429);assert.equal((await f.request('state')).data.lessons.length,0);assert.equal((await f.request('state')).data.drafts.length,2);assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM lesson_audio').get().n,0);
+  f.setVoiceFailure(false);assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body})).status,200);assert.ok((await f.request('state')).data.lessons.every(l=>l.audioReady));assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM lesson_audio').get().n,1);
+ }finally{f.sqlite.close()}
+});
+test('legacy assigned task prepares audio once and edited instruction gets different voice file',async()=>{
+ const f=fixture();try{
+  const child=await f.profile(),photo=(await f.upload()).data,draft=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];
+  f.sqlite.prepare("UPDATE lessons SET status='approved',child_id=? WHERE id=?").run(child.id,draft.id);
+  assert.equal((await f.request('lessons/'+draft.id+'/audio')).status,404);
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('lessons/'+draft.id+'/audio',{method:'POST',user:null,cookie})).status,200);assert.equal((await f.request('lessons/'+draft.id+'/audio',{method:'POST',user:null,cookie})).status,200);assert.equal(f.voiceCalls.length,1);
+  const updated={...exercise,prompt:'Busca la letra M entre estas opciones.'};f.sqlite.prepare("UPDATE lessons SET content=?,status='draft',revision=revision+1 WHERE id=?").run(JSON.stringify(updated),draft.id);
+  assert.equal((await f.request('lessons/'+draft.id,{method:'PATCH',body:{...updated,revision:2,reviewed:true,childId:child.id}})).status,200);assert.equal(f.voiceCalls.length,2);
+ }finally{f.sqlite.close()}
+});
+test('WAV streaming sizes are finalized; empty, truncated and non-audio replies are rejected',()=>{
+ const b=wavFixture();b.writeUInt32LE(0xffffffff,4);b.writeUInt32LE(0xffffffff,40);const bytes=b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength);normalizeWav(bytes);assert.equal(new DataView(bytes).getUint32(40,true),4800);validateWav(bytes);
+ assert.throws(()=>validateWav(new ArrayBuffer(10)));assert.throws(()=>validateWav(new ArrayBuffer(100)));assert.throws(()=>validateWav(bytes.slice(0,100)));
+});

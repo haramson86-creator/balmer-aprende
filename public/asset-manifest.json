@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "99b8cd2cfd2389cb",
+  "version": "3a634efa78b748c5",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 48802,
-      "sha256": "90f091e1a7fd4e9836fce6e7d4cd130c617435288206ca9e978171931e23ecd6"
+      "bytes": 49666,
+      "sha256": "1e6e4a4c2804281828d42cc8b323d5399be683acc6f25cbec7630bbeec526c7d"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -119,13 +119,13 @@
     },
     {
       "path": "audio.js",
-      "bytes": 1232,
-      "sha256": "fd9e070d224716d73da75dc1c5ce52d6755168770d2eb764e75f3d76ec2f3640"
+      "bytes": 2325,
+      "sha256": "373538611285b362823d9838d18b4e178ff081429d1f21be4530dae38469f477"
     },
     {
       "path": "cloud.js",
-      "bytes": 27561,
-      "sha256": "5c3edc8e090a54e6ff72932c0b776626ccc5c467deca53ac7dc9908507c44298"
+      "bytes": 28190,
+      "sha256": "ad1c0fe75baa0a9dad87d173b1dd2b808f5bf3b058a4fe00d686f5fd52bfd2e1"
     },
     {
       "path": "data.js",
@@ -174,8 +174,8 @@
     },
     {
       "path": "styles.css",
-      "bytes": 52435,
-      "sha256": "517c32573b1921e7ab6bc915e4f24fdedb1456ec6690c80c226b80d11816606f"
+      "bytes": 52579,
+      "sha256": "fbf4f625dfbf5b5a8346fbc9d72a412be119e3989e374be97b30818379575167"
     },
     {
       "path": "task-library.js",
@@ -185,7 +185,7 @@
     {
       "path": "version.js",
       "bytes": 35,
-      "sha256": "667cd92741d8d9f656f88cf452244b0361621d77f100c41e68d072ff41722b38"
+      "sha256": "2cbe84d09065594deeb382a7cebb57264400209e8f714beb9333537476fce616"
     }
   ]
 }

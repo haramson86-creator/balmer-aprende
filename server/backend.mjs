@@ -1,3 +1,4 @@
+import {ensureLessonAudio,prepareAudioBatch,serveLessonAudio} from './lesson-audio.mjs';
 import {taskLifecycle} from './task-lifecycle.mjs';
 import {authRoute,createChildCode,parentStatus,initialPin,rememberedParent} from './auth.mjs';
 import {nativeAuth,nativeUser} from './native-auth.mjs';
@@ -19,7 +20,7 @@ async function limitedBody(request,max=7*1024*1024){
   const bytes=new Uint8Array(length);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length}return bytes;
 }
 async function bodyJSON(request){try{return JSON.parse(new TextDecoder().decode(await limitedBody(request,16000)))}catch(e){if(e instanceof HttpError)throw e;throw new HttpError(400,'Solicitud no válida.');}}
-function viewLesson(r){return {...JSON.parse(r.content),id:r.id,status:r.status,revision:r.revision,sourceId:r.material_id,archived:!!(r.archived_at||r.photo_archived_at),assignedTo:r.child_id?[r.child_id]:[],approvedAt:r.approved_at,cloud:true,color:'peach',art:'Aa',tag:r.status==='approved'?'Tarea revisada':'Borrador de IA'};}
+function viewLesson(r){return {...JSON.parse(r.content),audio:`/api/lessons/${r.id}/audio`,audioReady:!!JSON.parse(r.content).audioHash,id:r.id,status:r.status,revision:r.revision,sourceId:r.material_id,archived:!!(r.archived_at||r.photo_archived_at),assignedTo:r.child_id?[r.child_id]:[],approvedAt:r.approved_at,cloud:true,color:'peach',art:'Aa',tag:r.status==='approved'?'Tarea revisada':'Borrador de IA'};}
 async function actorFor(request,env,user){
   const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_child=([a-f0-9]{64})(?:;|$)/)?.[1];
   if(token){const session=await row(env.DB,'SELECT * FROM child_sessions WHERE token_hash=? AND expires_at>?',await sha(token),now());check(session,401,'El acceso del niño caducó. Pide un enlace nuevo.');return {owner:session.owner,role:'child',childId:session.child_id};}
@@ -71,13 +72,20 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       await run(env.DB,'INSERT INTO attempts(id,owner,child_id,lesson_id,payload,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',b.id,owner,b.childId,lesson.id,JSON.stringify(attempt),attempt.createdAt);
       const saved=await row(env.DB,'SELECT owner,child_id,lesson_id,payload FROM attempts WHERE id=?',b.id);check(saved?.owner===owner&&saved.child_id===b.childId&&saved.lesson_id===lesson.id&&JSON.parse(saved.payload).answer===b.answer,409,'Intento en conflicto.');return json({attempt:JSON.parse(saved.payload),acknowledged:true});
     }
+    const audioMatch=path.match(/^\/api\/lessons\/([a-zA-Z0-9-]+)\/audio$/);
+    if(audioMatch&&['GET','POST'].includes(method)){
+      const lesson=await row(env.DB,'SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.id=? AND l.owner=?'+(role==='child'?" AND l.child_id=? AND l.status='approved' AND l.archived_at IS NULL AND m.archived_at IS NULL":''),audioMatch[1],owner,...(role==='child'?[childId]:[]));check(lesson,404,'Práctica no disponible para este perfil.');const content=JSON.parse(lesson.content);
+      if(method==='GET')return await serveLessonAudio(request,env,owner,content);
+      const hash=await ensureLessonAudio(env,owner,content,fetcher);content.audioHash=hash;await run(env.DB,'UPDATE lessons SET content=? WHERE id=? AND owner=? AND revision=? AND content=?',JSON.stringify(content),lesson.id,owner,lesson.revision,lesson.content);return json({audio:`/api/lessons/${lesson.id}/audio`,audioReady:true});
+    }
     check(role==='parent',403,'Esta acción solo está disponible para los padres.');
     if(!['GET','HEAD'].includes(method)&&(/^\/api\/family\/(select|invitations|members)/.test(path)||/^\/api\/profiles\//.test(path)||/\/assignment$/.test(path))){const response=await familyRoute(request,env.DB,actor,path,await bodyJSON(request));if(response)return response;}
     if(path==='/api/family'&&method==='DELETE'){
       check(actor.isFamilyOwner,403,'Solo quien creó la familia puede eliminarla.');
       const {confirmName}=await bodyJSON(request),family=await row(env.DB,'SELECT name FROM families WHERE owner=?',owner);check(family,404,'Familia no encontrada.');check(confirmName===family.name,400,'Escribe exactamente el nombre de la familia para eliminarla.');
       const statements=[env.DB.prepare('DELETE FROM notification_reads WHERE attempt_id IN (SELECT id FROM attempts WHERE owner=?)').bind(owner),env.DB.prepare('INSERT OR IGNORE INTO deletion_queue(object_key,owner,created_at) SELECT object_key,owner,? FROM materials WHERE owner=?').bind(now(),owner)];
-      for(const table of ['attempts','lessons','generations','materials','child_sessions','child_codes','profiles','audit','family_members','family_invites','family_preferences','families'])statements.push(env.DB.prepare('DELETE FROM '+table+' WHERE owner=?').bind(owner));
+      statements.push(env.DB.prepare('INSERT OR IGNORE INTO deletion_queue(object_key,owner,created_at) SELECT object_key,owner,? FROM lesson_audio WHERE owner=?').bind(now(),owner));
+      for(const table of ['attempts','lessons','lesson_audio','generations','materials','child_sessions','child_codes','profiles','audit','family_members','family_invites','family_preferences','families'])statements.push(env.DB.prepare('DELETE FROM '+table+' WHERE owner=?').bind(owner));
       await env.DB.batch(statements);await cleanupPhotos(env,owner);const pending=await row(env.DB,'SELECT count(*) AS n FROM deletion_queue WHERE owner=?',owner);return json({ok:true,pendingPhotos:pending.n});
     }
     if(path==='/api/family'&&method==='PUT'){
@@ -146,8 +154,10 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       check(Array.isArray(b.lessons)&&b.lessons.length>0&&b.lessons.length<=50,400,'Selecciona de 1 a 50 ejercicios para confirmar.');
       check(await row(env.DB,'SELECT id FROM materials WHERE id=? AND owner=? AND archived_at IS NULL',b.materialId,owner),404,'Foto no encontrada o archivada.');
       check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
-      const drafts=await rows(env.DB,"SELECT id,revision FROM lessons WHERE material_id=? AND owner=? AND status='draft'",b.materialId,owner);
+      const drafts=await rows(env.DB,"SELECT id,revision,content FROM lessons WHERE material_id=? AND owner=? AND status='draft'",b.materialId,owner);
       check(new Set(b.lessons.map(l=>l.id)).size===b.lessons.length&&drafts.length===b.lessons.length&&drafts.every(d=>b.lessons.some(l=>l.id===d.id&&l.revision===d.revision)),409,'El resumen cambió. Actualiza y revisa los ejercicios antes de confirmar.');
+      const hashes=await prepareAudioBatch(env,owner,drafts.map(d=>JSON.parse(d.content)),fetcher);
+      await env.DB.batch(drafts.map((d,i)=>env.DB.prepare("UPDATE lessons SET content=? WHERE id=? AND owner=? AND revision=? AND status='draft' AND content=?").bind(JSON.stringify({...JSON.parse(d.content),audioHash:hashes[i]}),d.id,owner,d.revision,d.content)));
       const approvedAt=now();const result=await run(env.DB,"WITH reviewed AS MATERIALIZED (SELECT id,revision FROM lessons WHERE material_id=? AND owner=? AND status='draft'), valid AS MATERIALIZED (SELECT count(*) AS n FROM reviewed r WHERE EXISTS (SELECT 1 FROM json_each(?) j WHERE json_extract(j.value,'$.id')=r.id AND json_extract(j.value,'$.revision')=r.revision)) UPDATE lessons SET child_id=?,status='approved',approved_at=?,revision=revision+1 WHERE owner=? AND id IN (SELECT id FROM reviewed) AND (SELECT count(*) FROM reviewed)=? AND (SELECT n FROM valid)=?",b.materialId,owner,JSON.stringify(b.lessons),b.childId,approvedAt,owner,b.lessons.length,b.lessons.length);
       check(result.meta.changes===drafts.length,409,'El resumen cambió durante la confirmación. Actualiza la página.');await env.DB.batch([log('photo.summary.confirmed',b.materialId)]);return json({approved:drafts.length,materialId:b.materialId});
     }
@@ -156,6 +166,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const b=await bodyJSON(request);check(b.reviewed===true,400,'Revisa y confirma la consigna y su respuesta.');const content=validateLesson(b);
       const lesson=await row(env.DB,'SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.id=? AND l.owner=? AND l.archived_at IS NULL AND m.archived_at IS NULL',lessonMatch[1],owner);check(lesson,404,'Borrador no encontrado o archivado.');check(lesson.status==='draft'&&b.revision===lesson.revision,409,'El borrador ya cambió o fue aprobado. Actualiza la página.');
       check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
+      content.audioHash=await ensureLessonAudio(env,owner,content,fetcher);
       const approvedAt=now();const result=await run(env.DB,"UPDATE lessons SET content=?,child_id=?,status='approved',approved_at=?,revision=revision+1 WHERE id=? AND owner=? AND revision=? AND status='draft'",JSON.stringify(content),b.childId,approvedAt,lesson.id,owner,lesson.revision);check(result.meta.changes===1,409,'El borrador cambió durante la revisión.');await env.DB.batch([log('practice.approved',lesson.id)]);return json({lesson:viewLesson({...lesson,content:JSON.stringify(content),child_id:b.childId,status:'approved',approved_at:approvedAt,revision:lesson.revision+1})});
     }
     throw new HttpError(404,'Ruta no encontrada.');
