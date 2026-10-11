@@ -13,3 +13,8 @@ dist/
 .next/
 *.tsbuildinfo
 next-env.d.ts
+
+releases/*.apk
+releases/device-*.png
+*.jks
+*.keystore
