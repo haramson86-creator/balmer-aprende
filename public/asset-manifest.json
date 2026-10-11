@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "060ff014853c16dc",
+  "version": "1b6d9e6e5c35726d",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 46306,
-      "sha256": "90e1801fb66781362abbf0db978fac42c859b6080de84749ad10fb880388ef02"
+      "bytes": 48616,
+      "sha256": "8ed5b0f7cbab60697ec2731ba2c9d5d76f12ced703880d6070ffadb33d6ff141"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -133,6 +133,11 @@
       "sha256": "86a991e570ca26b8136e3c2d1771115b6bf0f7ece5a201c244582e654a0bf424"
     },
     {
+      "path": "exercise-progress.js",
+      "bytes": 840,
+      "sha256": "b17b75d489ad1a1cd42d1d86eeffa434a575452b5e331f93b79357ca3993ea70"
+    },
+    {
       "path": "family-ui.js",
       "bytes": 9138,
       "sha256": "375e10d8c97c53112f8df2167d24c568ff337de8bcf3610a8c7ffd815029b5c1"
@@ -164,13 +169,13 @@
     },
     {
       "path": "styles.css",
-      "bytes": 50244,
-      "sha256": "03a2d99770626d8b880e4d15b8736dc9b8de4341ae6cacead948de77452ac008"
+      "bytes": 51394,
+      "sha256": "75daf7650121fd26d3ffb72d4898693d5bc679041f297c9ca57261d00210fa77"
     },
     {
       "path": "version.js",
       "bytes": 36,
-      "sha256": "86bad96dc6d9bc26a5c63016d54e45b5d16f9f83f9caba7603d8e08bb2df49aa"
+      "sha256": "69bd54e014f93b94dcc98a8ab7f8e8d4c07f97280fc6d106ccc558a10089c020"
     }
   ]
 }
