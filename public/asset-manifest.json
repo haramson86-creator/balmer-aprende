@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "6e9afcb26449fe0e",
+  "version": "9ce9bb7a9e6ce672",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 47531,
-      "sha256": "0a5b0892ae769c5a8103439a0e45b392a47148f43c7f816626848c13e975d4ac"
+      "bytes": 48447,
+      "sha256": "a0145dcc6c91ff224970854804a7fe64bdfadcd26d178e45ee95ca7460b49aa7"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -83,6 +83,16 @@
       "sha256": "37d9b62d6a27f3226d709ea487d953019efbf3018a168aae31d2b64ac35e0f1c"
     },
     {
+      "path": "assets/cheer.wav",
+      "bytes": 41498,
+      "sha256": "667918761327ac110a42739532fc40883712bd959ab070cf5a39bd567938d9e6"
+    },
+    {
+      "path": "assets/complete.wav",
+      "bytes": 36206,
+      "sha256": "1d03bf2ddf08d3d4523b0ed36396b8ea35270d2101ca5ce5fe59944848b8d790"
+    },
+    {
       "path": "assets/garden.svg",
       "bytes": 2160,
       "sha256": "d293df2cc73bf09c3ffa99831c22ff0bb7f70d61adba92b55aee61d05b1b3c7b"
@@ -93,9 +103,19 @@
       "sha256": "9483766cd7227458f2a05a6baa9631fcc8e5d8c3e572ad1dc7d3d4bc9b8a358b"
     },
     {
+      "path": "assets/pair.wav",
+      "bytes": 20772,
+      "sha256": "a65487278db3065444f2e8c797ccdf014fb57baf747309de1b83ea0bdf8c1769"
+    },
+    {
       "path": "assets/success.wav",
       "bytes": 22094,
       "sha256": "4e2c6eca336e81df0937d7eb1a3190f4539b87a0f5229d6054efb67616e7b617"
+    },
+    {
+      "path": "assets/try-again.wav",
+      "bytes": 37970,
+      "sha256": "beacd51e547f570adc72f91d1ae1e2f8b2426987dcabdb56a36d1da18807f257"
     },
     {
       "path": "audio.js",
@@ -139,8 +159,8 @@
     },
     {
       "path": "styles.css",
-      "bytes": 46512,
-      "sha256": "737ba5cf819718c6361e9b76722a94935d91199518b93eddc83724e9b4ec8363"
+      "bytes": 48235,
+      "sha256": "fb1084514436139c63bad1c7f496c9835b4a4b265f11bcebe2b0c3deda5cbb9f"
     }
   ]
 }

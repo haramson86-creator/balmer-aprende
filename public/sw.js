@@ -1,4 +1,4 @@
-const RELEASE='6e9afcb26449fe0e';
+const RELEASE='9ce9bb7a9e6ce672';
 const CONTROL='aprende-control-v1';const POINTER=new URL('active-package',self.registration.scope).href;
 async function digest(buffer){const hash=await crypto.subtle.digest('SHA-256',buffer);return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function active(){const response=await(await caches.open(CONTROL)).match(POINTER);return response?await response.json():null}
