@@ -1,4 +1,4 @@
-import {authRoute,createChildCode} from './auth.mjs';
+import {authRoute,createChildCode,parentStatus,initialPin} from './auth.mjs';
 import {HttpError,validateLesson,validateImage,generatePractices} from './practice.mjs';
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const id=()=>crypto.randomUUID();
@@ -20,7 +20,7 @@ function viewLesson(r){return {...JSON.parse(r.content),id:r.id,status:r.status,
 async function actorFor(request,env,user){
   const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_child=([a-f0-9]{64})(?:;|$)/)?.[1];
   if(token){const session=await row(env.DB,'SELECT * FROM child_sessions WHERE token_hash=? AND expires_at>?',await sha(token),now());check(session,401,'El acceso del niño caducó. Pide un enlace nuevo.');return {owner:session.owner,role:'child',childId:session.child_id};}
-  return user?.userId?{owner:user.userId,role:'parent'}:null;
+  return user?.userId?{owner:user.userId,email:user.email||null,role:'parent',...await parentStatus(request,env.DB,user.userId),initialPinReady:!!initialPin(env,user)}:null;
 }
 const cookie=(request,token,age)=>`aprende_child=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${new URL(request.url).protocol==='https:'?'; Secure':''}`;
 export async function handleAPI(request,env,user,{fetcher=fetch}={}){
@@ -37,13 +37,16 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     const actor=await actorFor(request,env,user);
     if(path==='/api/session'&&method==='GET'){
       if(!actor)return json({authenticated:false,aiReady:!!env.OPENAI_API_KEY,signIn:'/signin-with-chatgpt?return_to=%2F'});
+      if(actor.role==='parent'&&!actor.unlocked)return json({authenticated:false,role:'parent',needsParentPin:true,pinConfigured:actor.pinConfigured||actor.initialPinReady,parentEmail:actor.email,profiles:[],family:null,aiReady:!!env.OPENAI_API_KEY});
       const profiles=await rows(env.DB,actor.role==='child'?'SELECT id,name FROM profiles WHERE owner=? AND id=?':'SELECT id,name FROM profiles WHERE owner=? ORDER BY created_at',...actor.role==='child'?[actor.owner,actor.childId]:[actor.owner]);
       const family=actor.role==='parent'?await row(env.DB,'SELECT name FROM families WHERE owner=?',actor.owner):null;
-      return json({authenticated:true,role:actor.role,profiles,family,aiReady:!!env.OPENAI_API_KEY});
+      return json({authenticated:true,role:actor.role,profiles,family,needsParentPin:false,parentEmail:actor.role==='parent'?actor.email:null,aiReady:!!env.OPENAI_API_KEY});
     }
     check(actor,401,'Inicia sesión para guardar prácticas en tu familia.');
     const {owner,role,childId}=actor;
+    check(role!=='parent'||actor.unlocked,403,'Introduce tu código para entrar como padre.');
     if(path==='/api/state'&&method==='GET'){
+      if(role==='parent')await cleanupPhotos(env,owner);
       if(role==='child'){const lessons=await rows(env.DB,"SELECT * FROM lessons WHERE owner=? AND child_id=? AND status='approved' ORDER BY created_at DESC",owner,childId);return json({materials:[],drafts:[],lessons:lessons.map(viewLesson),attempts:[]});}
       const [materials,lessons,attempts]=await Promise.all([rows(env.DB,"SELECT id,name,mime,bytes,created_at,COALESCE((SELECT status FROM generations g WHERE g.material_id=materials.id AND g.owner=materials.owner ORDER BY g.created_at DESC LIMIT 1),'uploaded') AS analysisStatus FROM materials WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner),rows(env.DB,'SELECT * FROM lessons WHERE owner=? ORDER BY created_at DESC LIMIT 500',owner),rows(env.DB,'SELECT payload FROM attempts WHERE owner=? ORDER BY created_at DESC LIMIT 1000',owner)]);
       return json({materials:materials.map(m=>({...m,cloud:true,size:m.bytes,url:`/api/materials/${m.id}`,exerciseCount:lessons.filter(l=>l.material_id===m.id).length})),drafts:lessons.filter(l=>l.status==='draft').map(viewLesson),lessons:lessons.filter(l=>l.status==='approved').map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});
@@ -60,6 +63,12 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const saved=await row(env.DB,'SELECT owner,child_id,lesson_id,payload FROM attempts WHERE id=?',b.id);check(saved?.owner===owner&&saved.child_id===b.childId&&saved.lesson_id===lesson.id&&JSON.parse(saved.payload).answer===b.answer,409,'Intento en conflicto.');return json({attempt:JSON.parse(saved.payload),acknowledged:true});
     }
     check(role==='parent',403,'Esta acción solo está disponible para los padres.');
+    if(path==='/api/family'&&method==='DELETE'){
+      const {confirmName}=await bodyJSON(request),family=await row(env.DB,'SELECT name FROM families WHERE owner=?',owner);check(family,404,'Familia no encontrada.');check(confirmName===family.name,400,'Escribe exactamente el nombre de la familia para eliminarla.');
+      const statements=[env.DB.prepare('INSERT OR IGNORE INTO deletion_queue(object_key,owner,created_at) SELECT object_key,owner,? FROM materials WHERE owner=?').bind(now(),owner)];
+      for(const table of ['attempts','lessons','generations','materials','child_sessions','child_codes','profiles','audit','families'])statements.push(env.DB.prepare('DELETE FROM '+table+' WHERE owner=?').bind(owner));
+      await env.DB.batch(statements);await cleanupPhotos(env,owner);const pending=await row(env.DB,'SELECT count(*) AS n FROM deletion_queue WHERE owner=?',owner);return json({ok:true,pendingPhotos:pending.n});
+    }
     if(path==='/api/family'&&method==='PUT'){
       const {name}=await bodyJSON(request);check(typeof name==='string'&&name.trim().length>=1&&name.trim().length<=60,400,'Escribe el nombre de tu familia (hasta 60 caracteres).');
       await env.DB.batch([env.DB.prepare('INSERT INTO families(owner,name,created_at) VALUES(?,?,?) ON CONFLICT(owner) DO UPDATE SET name=excluded.name').bind(owner,name.trim(),now()),audit(env.DB,owner,'family.saved',owner)]);return json({name:name.trim()});
@@ -128,3 +137,5 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     throw new HttpError(404,'Ruta no encontrada.');
   }catch(error){return json({error:error instanceof HttpError?error.message:'No se pudo completar la operación. Inténtalo de nuevo.',code:error instanceof HttpError?error.status:500},error instanceof HttpError?error.status:500);}
 }
+
+async function cleanupPhotos(env,owner){if(!env.BUCKET)return;const pending=await rows(env.DB,'SELECT object_key FROM deletion_queue WHERE owner=? LIMIT 10',owner);for(const item of pending){try{await env.BUCKET.delete(item.object_key);await run(env.DB,'DELETE FROM deletion_queue WHERE owner=? AND object_key=?',owner,item.object_key)}catch{break}}}

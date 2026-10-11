@@ -11,3 +11,7 @@ export const families = sqliteTable('families', {owner:text('owner').primaryKey(
 
 export const childCodes = sqliteTable('child_codes', {codeHash:text('code_hash').primaryKey(),owner:text('owner').notNull(),childId:text('child_id').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('child_codes_owner_child').on(t.owner,t.childId)]);
 export const authLimits = sqliteTable('auth_limits', {key:text('key').primaryKey(),count:integer('count').notNull(),expiresAt:text('expires_at').notNull()});
+
+export const parentPins = sqliteTable('parent_pins', {owner:text('owner').primaryKey(),pinHash:text('pin_hash').notNull(),createdAt:text('created_at').notNull()});
+export const parentAccessSessions = sqliteTable('parent_access_sessions', {tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('parent_access_owner').on(t.owner)]);
+export const deletionQueue = sqliteTable('deletion_queue', {objectKey:text('object_key').primaryKey(),owner:text('owner').notNull(),createdAt:text('created_at').notNull()},t=>[index('deletion_queue_owner').on(t.owner)]);

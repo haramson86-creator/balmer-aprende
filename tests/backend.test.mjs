@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
+import {makePinHash} from '../server/auth.mjs';
 import {handleAPI} from '../server/backend.mjs';
 import {generatePractices,validateLesson} from '../server/practice.mjs';
 
@@ -13,10 +14,11 @@ function fixture(){
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
   const fetcher=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:[exercise]})}]}]})};
-  const request=async(path,{method='GET',body,user='family-a',cookie,origin='https://aprende.test'}={})=>{const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
+  const parentCookies=new Map();
+  const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
   const profile=async(user='family-a')=>(await request('profiles',{method:'POST',user,body:{name:'Perfil de prueba'}})).data;
   const upload=async(user='family-a')=>{const photo=new FormData();photo.append('consent','yes');photo.append('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKXYAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'example.png');return request('materials',{method:'POST',body:photo,user})};
-  return {sqlite,env,request,profile,upload,calls};
+  return {sqlite,env,request,profile,upload,calls,objects};
 }
 
 test('photo → draft → adult approval → child execution uses persisted isolated records',async()=>{
@@ -112,5 +114,58 @@ test('child codes bind to one family and child, rotate and revoke all prior acce
   assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:third.data.code}})).status,401);
   for(let i=0;i<10;i++)await f.request('auth/child',{method:'POST',user:null,body:{code:'AAAA-BBBB-CCCC'}});
   assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:'AAAA-BBBB-CCCC'}})).status,429);
+ }finally{f.sqlite.close()}
+});
+
+
+test('parent PIN gates private records and is bound to the authenticated owner',async()=>{
+ const f=fixture();try{
+  const locked=await f.request('session',{skipPin:true});assert.equal(locked.data.needsParentPin,true);assert.equal(locked.data.authenticated,false);assert.equal(locked.data.pinConfigured,false);
+  assert.equal((await f.request('state',{skipPin:true})).status,403);
+  assert.equal((await f.request('auth/parent/setup',{method:'POST',user:null,body:{pin:'3579'}})).status,401);
+  const setup=await f.request('auth/parent/setup',{method:'POST',body:{pin:'3579'}});assert.equal(setup.status,200);const cookie=setup.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('session',{cookie})).data.authenticated,true);
+  assert.equal((await f.request('state',{cookie,user:'family-b'})).status,403);
+  assert.equal((await f.request('auth/parent/setup',{method:'POST',body:{pin:'9999'}})).status,409);
+  assert.equal((await f.request('auth/parent/verify',{method:'POST',body:{pin:'9999'}})).status,403);
+  assert.notEqual(f.sqlite.prepare('SELECT pin_hash FROM parent_pins').get().pin_hash,'3579');
+  const valid=await f.request('auth/parent/verify',{method:'POST',body:{pin:'3579'}});assert.equal(valid.status,200);
+  await f.request('auth/logout',{method:'POST',cookie,body:{}});assert.equal((await f.request('state',{cookie})).status,403);
+  await f.request('auth/parent/verify',{method:'POST',body:{pin:'3579'}});assert.equal((await f.request('auth/parent/verify',{method:'POST',body:{pin:'3579'}})).status,429);
+ }finally{f.sqlite.close()}
+});
+
+test('family deletion removes only owned records and retries photo cleanup durably',async()=>{
+ const f=fixture();try{
+  await f.request('family',{method:'PUT',body:{name:'Familia QA'}});await f.request('family',{method:'PUT',user:'family-b',body:{name:'Otra familia'}});
+  const child=await f.profile(),other=await f.profile('family-b'),photo=await f.upload(),otherPhoto=await f.upload('family-b');
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}});const cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('family',{method:'DELETE',user:null,cookie,body:{confirmName:'Familia QA'}})).status,403);
+  assert.equal((await f.request('family',{method:'DELETE',body:{confirmName:'Otra'}})).status,400);
+  const deleteObject=f.env.BUCKET.delete;f.env.BUCKET.delete=async()=>{throw Error('temporary R2 failure')};
+  const removed=await f.request('family',{method:'DELETE',body:{confirmName:'Familia QA'}});assert.equal(removed.status,200);assert.equal(removed.data.pendingPhotos,1);
+  assert.equal((await f.request('session')).data.family,null);assert.equal((await f.request('session',{user:null,cookie})).status,401);
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}})).status,401);
+  assert.equal((await f.request('session',{user:'family-b'})).data.profiles[0].id,other.id);assert.equal((await f.request('materials/'+otherPhoto.data.id,{user:'family-b'})).status,200);
+  f.env.BUCKET.delete=deleteObject;await f.request('state');assert.equal(f.sqlite.prepare('SELECT count(*) n FROM deletion_queue').get().n,0);assert.equal(f.objects.size,1);
+  assert.equal((await f.request('materials/'+photo.data.id)).status,404);
+ }finally{f.sqlite.close()}
+});
+
+
+test('configured parent code is bound to trusted email and requires leaving child access',async()=>{
+ const f=fixture();try{
+  f.env.INITIAL_PARENT_EMAIL='family-a@example.test';f.env.INITIAL_PARENT_PIN_HASH=await makePinHash('3579');
+  assert.equal((await f.request('session',{skipPin:true})).data.pinConfigured,true);
+  assert.equal((await f.request('session',{user:'family-b',skipPin:true})).data.pinConfigured,false);
+  const login=await f.request('auth/parent/verify',{method:'POST',body:{pin:'3579'}});assert.equal(login.status,200);const parent=login.response.headers.get('Set-Cookie').split(';')[0];
+  const child=(await f.request('profiles',{method:'POST',cookie:parent,body:{name:'Niño QA'}})).data;
+  const access=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}});const cookie=access.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('session',{cookie})).data.role,'child');
+  assert.equal((await f.request('auth/parent/verify',{method:'POST',cookie,body:{pin:'3579'}})).status,403);
+  const logout=await f.request('auth/logout',{method:'POST',cookie,body:{}});assert.equal(logout.status,200);assert.match(logout.response.headers.get('Set-Cookie'),/aprende_child=;.*Max-Age=0/);
+  const gate=await f.request('session',{skipPin:true});assert.equal(gate.data.role,'parent');assert.equal(gate.data.needsParentPin,true);
+  assert.equal((await f.request('auth/parent/verify',{method:'POST',body:{pin:'3579'}})).status,200);
+  assert.equal((await f.request('auth/parent/verify',{method:'POST',user:'family-b',body:{pin:'3579'}})).status,403);
  }finally{f.sqlite.close()}
 });

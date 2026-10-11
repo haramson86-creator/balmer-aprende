@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "63905bb1dc862d1b",
+  "version": "cd7cd4994dba5016",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 45221,
-      "sha256": "3cb14cbf9ca6a29e7b033533dd6faf5f71e0bb9b842594d699ed9809abe2f0af"
+      "bytes": 45441,
+      "sha256": "7716b0621acdfa770356a6a3174498a457f647614bd8ef32cd6c296bf5d9865e"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -124,8 +124,8 @@
     },
     {
       "path": "cloud.js",
-      "bytes": 20447,
-      "sha256": "26d8a414cfbca8291e74b91afc96e1cc6e685ca1a19e83c06045f7affec6152d"
+      "bytes": 24745,
+      "sha256": "6d61cc0e3a200a5b85f729a222dcd4087d00c5af1759572e66b5693010545699"
     },
     {
       "path": "data.js",
@@ -133,14 +133,14 @@
       "sha256": "86a991e570ca26b8136e3c2d1771115b6bf0f7ece5a201c244582e654a0bf424"
     },
     {
-      "path": "index.html",
-      "bytes": 764,
-      "sha256": "0b17822bb9b15d9a4e5605d2336c4be014b846c79f75423be43a9fc99e26c3a4"
-    },
-    {
       "path": "manifest.webmanifest",
       "bytes": 284,
       "sha256": "28ddd74b01b1d31130ffca5485712a3ba3fc661f1ca77597d4170fe170b9a4bb"
+    },
+    {
+      "path": "offline.html",
+      "bytes": 764,
+      "sha256": "0b17822bb9b15d9a4e5605d2336c4be014b846c79f75423be43a9fc99e26c3a4"
     },
     {
       "path": "offline.js",
@@ -165,7 +165,7 @@
     {
       "path": "version.js",
       "bytes": 36,
-      "sha256": "6ec5a6261ff96914891cd264a25ebea7b8781477ddbc94cff5de9d5cc1429aa8"
+      "sha256": "f2712ba2a36c9ad03f70ea3f464ede4d90c382d5e59110dbe6dd8bd4b44fcf8a"
     }
   ]
 }

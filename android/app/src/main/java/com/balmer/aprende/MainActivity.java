@@ -8,6 +8,8 @@ public class MainActivity extends BridgeActivity {
     @Override public void onCreate(Bundle state) {
         registerPlugin(AppUpdatesPlugin.class);
         super.onCreate(state);
+        // Refresh network resources after an APK update while preserving sign-in cookies.
+        getBridge().getWebView().clearCache(true);
         updater = new AppUpdater(this);
     }
     @Override public void onResume() {

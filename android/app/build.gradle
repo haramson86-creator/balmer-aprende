@@ -7,8 +7,8 @@ android {
         applicationId "com.balmer.aprende"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode Integer.parseInt(project.findProperty('aprendeVersionCode') ?: '6')
-        versionName project.findProperty('aprendeVersionName') ?: '0.4.5'
+        versionCode Integer.parseInt(project.findProperty('aprendeVersionCode') ?: '7')
+        versionName project.findProperty('aprendeVersionName') ?: '0.4.6'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -9,12 +9,12 @@ for(const exit of ['null','replacement']){
 const cachesMap=new Map();const key=x=>typeof x==='string'?x:x.url||x.href;
 const caches={open:async name=>{if(!cachesMap.has(name))cachesMap.set(name,new Map());const c=cachesMap.get(name);return {put:async(k,r)=>c.set(key(k),r.clone()),match:async k=>c.get(key(k))?.clone()}}};
 const scope='https://example.test/app/';const listeners={};const self={registration:{scope},location:{origin:'https://example.test'},clients:{claim:async()=>{}},addEventListener:(k,v)=>listeners[k]=v};
-const hash=s=>createHash('sha256').update(s).digest('hex');const manifest=(v,txt)=>({version:v,assets:[{path:'index.html',sha256:hash(txt)},{path:'app.js',sha256:hash('js'+txt)}]});let m=manifest('1111111111111111','v1'),contents={'index.html':'v1','app.js':'jsv1'},fail='';
+const hash=s=>createHash('sha256').update(s).digest('hex');const manifest=(v,txt)=>({version:v,assets:[{path:'offline.html',sha256:hash(txt)},{path:'app.js',sha256:hash('js'+txt)}]});let m=manifest('1111111111111111','v1'),contents={'offline.html':'v1','app.js':'jsv1'},fail='';
 const fetch=async input=>{const url=key(input);if(url.endsWith('asset-manifest.json'))return new Response(JSON.stringify(m));const file=url.split('/').at(-1);if(file===fail)throw Error('injected fetch failure');return new Response(contents[file],{status:contents[file]?200:404})};
 vm.runInNewContext(fs.readFileSync(base+'sw.js','utf8'),{self,caches,fetch,URL,Response,crypto:webcrypto,Error});
 async function msg(type){let result,p;listeners.message({data:{type},ports:[{postMessage:r=>result=r}],waitUntil:x=>p=x});await p;return result}
 assert.equal((await msg('DOWNLOAD')).ok,true);tests++;console.log('PASS initial verified package');
-m=manifest('2222222222222222','v2');contents={'index.html':'v2','app.js':'jsv2'};fail='app.js';assert.equal((await msg('DOWNLOAD')).ok,false);assert.equal((await msg('VERIFY')).version,'1111111111111111');tests++;console.log('PASS interrupted update keeps active old generation');
+m=manifest('2222222222222222','v2');contents={'offline.html':'v2','app.js':'jsv2'};fail='app.js';assert.equal((await msg('DOWNLOAD')).ok,false);assert.equal((await msg('VERIFY')).version,'1111111111111111');tests++;console.log('PASS interrupted update keeps active old generation');
 fail='';assert.equal((await msg('DOWNLOAD')).version,'2222222222222222');tests++;console.log('PASS successful update commits new generation');
 let response;listeners.fetch({request:{url:scope,method:'GET',mode:'navigate'},respondWith:p=>response=p});assert.equal(await(await response).text(),'v2');tests++;console.log('PASS navigation serves active shell');
 await(await caches.open('aprende-assets-2222222222222222')).put(scope+'app.js',new Response('corrupted'));assert.equal((await msg('VERIFY')).ok,false);tests++;console.log('PASS resource corruption fails verification');
