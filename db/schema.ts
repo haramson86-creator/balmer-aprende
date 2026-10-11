@@ -6,3 +6,5 @@ export const lessons = sqliteTable('lessons', {id:text('id').primaryKey(),owner:
 export const attempts = sqliteTable('attempts', {id:text('id').primaryKey(),owner:text('owner').notNull(),childId:text('child_id').notNull(),lessonId:text('lesson_id').notNull(),payload:text('payload').notNull(),createdAt:text('created_at').notNull()},t=>[index('attempts_owner_child').on(t.owner,t.childId)]);
 export const childSessions = sqliteTable('child_sessions', {tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),childId:text('child_id').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('child_sessions_owner').on(t.owner)]);
 export const audit = sqliteTable('audit', {id:text('id').primaryKey(),owner:text('owner').notNull(),action:text('action').notNull(),entityId:text('entity_id').notNull(),createdAt:text('created_at').notNull()});
+
+export const families = sqliteTable('families', {owner:text('owner').primaryKey(),name:text('name').notNull(),createdAt:text('created_at').notNull()});

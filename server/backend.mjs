@@ -36,7 +36,8 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     if(path==='/api/session'&&method==='GET'){
       if(!actor)return json({authenticated:false,aiReady:!!env.OPENAI_API_KEY,signIn:'/signin-with-chatgpt?return_to=%2F'});
       const profiles=await rows(env.DB,actor.role==='child'?'SELECT id,name FROM profiles WHERE owner=? AND id=?':'SELECT id,name FROM profiles WHERE owner=? ORDER BY created_at',...actor.role==='child'?[actor.owner,actor.childId]:[actor.owner]);
-      return json({authenticated:true,role:actor.role,profiles,aiReady:!!env.OPENAI_API_KEY});
+      const family=actor.role==='parent'?await row(env.DB,'SELECT name FROM families WHERE owner=?',actor.owner):null;
+      return json({authenticated:true,role:actor.role,profiles,family,aiReady:!!env.OPENAI_API_KEY});
     }
     check(actor,401,'Inicia sesión para guardar prácticas en tu familia.');
     const {owner,role,childId}=actor;
@@ -57,6 +58,10 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const saved=await row(env.DB,'SELECT owner,child_id,lesson_id,payload FROM attempts WHERE id=?',b.id);check(saved?.owner===owner&&saved.child_id===b.childId&&saved.lesson_id===lesson.id&&JSON.parse(saved.payload).answer===b.answer,409,'Intento en conflicto.');return json({attempt:JSON.parse(saved.payload),acknowledged:true});
     }
     check(role==='parent',403,'Esta acción solo está disponible para los padres.');
+    if(path==='/api/family'&&method==='PUT'){
+      const {name}=await bodyJSON(request);check(typeof name==='string'&&name.trim().length>=1&&name.trim().length<=60,400,'Escribe el nombre de tu familia (hasta 60 caracteres).');
+      await env.DB.batch([env.DB.prepare('INSERT INTO families(owner,name,created_at) VALUES(?,?,?) ON CONFLICT(owner) DO UPDATE SET name=excluded.name').bind(owner,name.trim(),now()),audit(env.DB,owner,'family.saved',owner)]);return json({name:name.trim()});
+    }
     if(path==='/api/profiles'&&method==='POST'){
       const {name}=await bodyJSON(request);check(typeof name==='string'&&name.trim().length>=1&&name.trim().length<=40,400,'Escribe un apodo de hasta 40 caracteres.');
       const count=await row(env.DB,'SELECT count(*) AS n FROM profiles WHERE owner=?',owner);check(count.n<10,409,'Puedes crear hasta 10 perfiles.');const profile={id:id(),name:name.trim()};await env.DB.batch([env.DB.prepare('INSERT INTO profiles(id,owner,name,created_at) VALUES(?,?,?,?)').bind(profile.id,owner,profile.name,now()),audit(env.DB,owner,'profile.created',profile.id)]);return json(profile,201);

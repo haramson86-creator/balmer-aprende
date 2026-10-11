@@ -8,6 +8,7 @@ import {generatePractices,validateLesson} from '../server/practice.mjs';
 const exercise={type:'select',title:'Encuentra la M',prompt:'¿Cuál es la letra M?',options:['M','L','S'],answer:'M',category:'source',skill:'Reconocer letras'};
 function fixture(){
   const sqlite=new DatabaseSync(':memory:');sqlite.exec(fs.readFileSync(new URL('../drizzle/0000_glorious_karen_page.sql',import.meta.url),'utf8'));
+  sqlite.exec('CREATE TABLE families(owner TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL)');
   const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){const result=sqlite.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}}}}},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results}catch(e){sqlite.exec('ROLLBACK');throw e}}};
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
@@ -80,4 +81,14 @@ test('OpenAI refusal, quota, incomplete and invalid outputs remain unassigned',a
   for(const [reply,status] of [[{status:'incomplete',output:[]},422],[{status:'completed',output:[{content:[{type:'refusal',refusal:'No'}]}]},422],[{status:'completed',output:[{content:[{type:'output_text',text:'not json'}]}]},502]])await assert.rejects(()=>generatePractices({key:'test',image:new Uint8Array([1]),mime:'image/png',fetcher:async()=>Response.json(reply)}),e=>e.status===status);
   await assert.rejects(()=>generatePractices({key:'test',image:new Uint8Array([1]),mime:'image/png',fetcher:async()=>new Response('',{status:429})}),e=>e.status===429);
   assert.throws(()=>validateLesson({...exercise,options:['M','M','L']}));assert.throws(()=>validateLesson({...exercise,answer:'Z'}));
+});
+
+test('family setup persists per owner and requires a parent',async()=>{
+ const f=fixture();try{
+  assert.equal((await f.request('family',{method:'PUT',body:{name:'  Familia QA  '}})).status,200);
+  assert.equal((await f.request('session')).data.family.name,'Familia QA');
+  assert.equal((await f.request('session',{user:'family-b'})).data.family,null);
+  assert.equal((await f.request('family',{method:'PUT',body:{name:' '}})).status,400);
+  assert.equal((await f.request('family',{method:'PUT',user:null,body:{name:'Otra'}})).status,401);
+ }finally{f.sqlite.close()}
 });
