@@ -1,6 +1,6 @@
 # Aprende — prototipo vertical privado
 
-Versión 0.2. Producto principal PWA; nombre provisional. Código estático modular HTML/CSS/JavaScript sin dependencias runtime externas. Las especificaciones completas prevén evolución a React/TypeScript si aporta valor; este corte ligero verifica el flujo local sin provisionar Firebase.
+Versión 0.3 (ajuste responsive). Producto principal PWA; nombre provisional. Código estático modular HTML/CSS/JavaScript sin dependencias runtime externas. Las especificaciones completas prevén evolución a React/TypeScript si aporta valor; este corte ligero verifica el flujo local sin provisionar Firebase.
 
 ## Funcionalidad real
 - Perfiles ficticios Luna y Leo; actividad y resultados independientes por perfil local.
@@ -34,3 +34,17 @@ Fuente y opciones entran como texto escapado; no ejecutar contenido fotografiado
 
 ## Próximas puertas de aceptación
 Validación perceptual de audios; borradores recuperables; pruebas físicas Fire7/iOS; reglas multi-familia y backend idempotente real; Firebase cuenta/región/edición/facturación aprobados; IA segura con proveedor y consentimiento definidos; corpus de trazos validado con autorización.
+
+## Ajuste responsive 0.3
+
+Modo práctica independiente: viewport dinámico, cabecera compacta, contenido flexible y barra inferior con fila propia. Reiniciar/Terminé e Intentar de nuevo/Otra actividad no dependen de desplazar la página. En horizontal las instrucciones y el ejercicio comparten dos columnas; en vertical se apilan. Se respetan safe areas y la altura visual disponible. El lienzo mantiene buffer600×500 y coordenadas normalizadas al girar; no se reinicia el ejercicio por resize. Un trazo activo se interrumpe conservando lo dibujado, y puede continuarse con otro gesto. El contenido de texto excepcionalmente largo puede desplazarse dentro del área central, conservando controles.
+
+Prueba local sugerida (requiere entorno autorizado):
+
+```
+python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
+```
+
+Abrir http://localhost:4173 en el mismo ordenador. Ese localhost no es el localhost de una tablet diferente. La conexión USB/LAN/ADB y los permisos deben verificarse en el ordenador autorizado; no están configurados por este repositorio. Desde otro equipo por HTTP de LAN, Service Workers pueden no funcionar por falta de contexto seguro; probar offline requiere un origen admitido y seguro. No afirmar acceso a la tablet ni abrir interfaces/red sin autorización.
+
+El usuario decidió continuar en el mismo Site. La publicación del ajuste responsive se realiza tras revisión estática y regresiones; las pruebas reales en tablet siguen pendientes.
