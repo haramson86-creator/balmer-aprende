@@ -146,7 +146,9 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
         const exercises=await generatePractices({key:env.OPENAI_API_KEY,model:env.OPENAI_MODEL,image:await object.arrayBuffer(),mime:material.mime,fetcher});
         const drafts=exercises.map(content=>({id:id(),content,createdAt:now()}));
         await env.DB.batch([...(b.reanalyze===true?[env.DB.prepare("UPDATE lessons SET archived_at=?,content=json_set(content,'$.supersededBy',?) WHERE material_id=? AND owner=? AND archived_at IS NULL").bind(now(),b.id,material.id,owner)]:[]),...drafts.map(d=>env.DB.prepare("INSERT INTO lessons(id,owner,material_id,generation_id,status,content,revision,created_at) VALUES(?,?,?,?,'draft',?,1,?)").bind(d.id,owner,material.id,b.id,JSON.stringify(d.content),d.createdAt)),env.DB.prepare("UPDATE generations SET status='completed' WHERE id=? AND owner=?").bind(b.id,owner),log(b.reanalyze===true?'practice.reanalyzed':'practice.generated',b.id)]);
-        return json({drafts:drafts.map(d=>viewLesson({id:d.id,content:JSON.stringify(d.content),status:'draft',revision:1,material_id:material.id,child_id:null,approved_at:null}))},201);
+        let audioWarning=null;
+        try{const hashes=await prepareAudioBatch(env,owner,drafts.map(d=>d.content),fetcher);await env.DB.batch(drafts.map((d,i)=>{d.content.audioHash=hashes[i];return env.DB.prepare('UPDATE lessons SET content=? WHERE id=? AND owner=?').bind(JSON.stringify(d.content),d.id,owner)}));}catch{audioWarning='Ejercicios guardados. Reintenta Escuchar para preparar la voz antes de asignarlos.';}
+        return json({audioWarning,drafts:drafts.map(d=>viewLesson({id:d.id,content:JSON.stringify(d.content),status:'draft',revision:1,material_id:material.id,child_id:null,approved_at:null}))},201);
       }catch(error){await run(env.DB,"UPDATE generations SET status='failed' WHERE id=? AND owner=?",b.id,owner);throw error;}
     }
     if(path==='/api/lessons/confirm-photo'&&method==='POST'){
@@ -166,6 +168,13 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     if(lessonMatch&&method==='PATCH'){
       const b=await bodyJSON(request);check(b.reviewed===true,400,'Revisa y confirma la consigna y su respuesta.');const content=validateLesson(b);
       const lesson=await row(env.DB,'SELECT l.* FROM lessons l JOIN materials m ON m.id=l.material_id AND m.owner=l.owner WHERE l.id=? AND l.owner=? AND l.archived_at IS NULL AND m.archived_at IS NULL',lessonMatch[1],owner);check(lesson,404,'Borrador no encontrado o archivado.');check(['draft','approved'].includes(lesson.status)&&b.revision===lesson.revision,409,'El borrador ya cambió o fue aprobado. Actualiza la página.');
+      if(b.draftOnly===true){
+        check(lesson.status==='draft',409,'Solo puedes guardar borradores sin asignar.');
+        const original=JSON.parse(lesson.content);if(original.prompt===content.prompt&&original.answer===content.answer&&JSON.stringify(original.options)===JSON.stringify(content.options)&&original.analysis)content.analysis=original.analysis;
+        let audioWarning=null;try{content.audioHash=await ensureLessonAudio(env,owner,content,fetcher)}catch{audioWarning='Borrador guardado; reintenta Escuchar para preparar la voz.';}
+        const saved=await run(env.DB,"UPDATE lessons SET content=?,revision=revision+1 WHERE id=? AND owner=? AND revision=? AND status='draft'",JSON.stringify(content),lesson.id,owner,lesson.revision);check(saved.meta.changes===1,409,'El borrador cambió.');await env.DB.batch([log('practice.draft.updated',lesson.id)]);
+        return json({audioWarning,lesson:viewLesson({...lesson,content:JSON.stringify(content),revision:lesson.revision+1})});
+      }
       check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
       const original=JSON.parse(lesson.content);if(original.prompt===content.prompt&&original.answer===content.answer&&JSON.stringify(original.options)===JSON.stringify(content.options)&&original.analysis)content.analysis=original.analysis;
       content.audioHash=await ensureLessonAudio(env,owner,content,fetcher);

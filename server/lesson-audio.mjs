@@ -1,8 +1,8 @@
 import {HttpError} from './practice.mjs';
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message)};
 const digest=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
-export const narration=lesson=>`${lesson.prompt} Las opciones son: ${lesson.options.join('. ')}.`;
-export const audioHash=lesson=>digest('coral-es-v1\n'+narration(lesson));
+export const narration=lesson=>lesson.prompt;
+export const audioHash=lesson=>digest('coral-es-question-v2\n'+narration(lesson));
 export function normalizeWav(bytes){
  // Streaming WAV uses unknown-size sentinels. Finalize lengths after receiving the entire body.
  const b=new Uint8Array(bytes),v=new DataView(bytes);if(b.length<44)return bytes;
@@ -27,7 +27,7 @@ export async function ensureLessonAudio(env,owner,lesson,fetcher=fetch){
  const lock=await db.prepare('INSERT INTO lesson_audio(owner,hash,object_key,created_at,lock_until,token) VALUES(?,?,?,?,?,?) ON CONFLICT(owner,hash) DO UPDATE SET lock_until=excluded.lock_until,token=excluded.token,ready_at=NULL WHERE lesson_audio.lock_until<?').bind(owner,hash,key,stamp,new Date(Date.now()+90000).toISOString(),token,stamp).run();
  check(lock.meta.changes===1,409,'El audio se está preparando. Espera unos segundos y vuelve a intentarlo.');
  try{
-  let response;try{response=await fetcher('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(60000),body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:narration(lesson),instructions:'Habla en español latinoamericano con voz cálida y natural. Lee la consigna y las opciones despacio, claramente, con pausas. Para las letras aisladas pronuncia su nombre en español. No añadas información ni reveles la respuesta correcta.',response_format:'wav',speed:.9})})}catch{throw new HttpError(502,'No se pudo preparar la voz. Tus ejercicios están guardados; vuelve a intentarlo.');}
+  let response;try{response=await fetcher('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(60000),body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:narration(lesson),instructions:'Habla en español latinoamericano con voz cálida y natural. Lee solamente la pregunta recibida, claramente y con ritmo natural. No leas opciones ni soluciones. Para las letras aisladas pronuncia su nombre en español. No añadas información ni reveles la respuesta correcta.',response_format:'wav',speed:.9})})}catch{throw new HttpError(502,'No se pudo preparar la voz. Tus ejercicios están guardados; vuelve a intentarlo.');}
   check(response.ok,response.status===429?429:502,'No se pudo generar el audio. Comprueba la conexión o la cuota de OpenAI y reintenta.');
   const reader=response.body.getReader(),chunks=[];let size=0;while(true){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>3*1024*1024){await reader.cancel();throw new HttpError(502,'El audio generado es demasiado grande.');}chunks.push(part.value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}normalizeWav(bytes.buffer);validateWav(bytes.buffer);
   await env.BUCKET.put(key,bytes.buffer,{httpMetadata:{contentType:'audio/wav'}});

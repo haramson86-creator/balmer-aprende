@@ -301,7 +301,7 @@ test('approved audio is persisted, private, range-compatible and reused across r
 });
 test('audio failure blocks assignment without losing drafts and retry preserves reviewed content',async()=>{
  const f=fixture(2);try{
-  const child=await f.profile(),photo=(await f.upload()).data,drafts=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts;
+  f.setVoiceFailure(true);const child=await f.profile(),photo=(await f.upload()).data,drafts=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts;
   const body={materialId:photo.id,childId:child.id,reviewed:true,lessons:drafts.map(d=>({id:d.id,revision:d.revision}))};f.setVoiceFailure(true);
   assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body})).status,429);assert.equal((await f.request('state')).data.lessons.length,0);assert.equal((await f.request('state')).data.drafts.length,2);assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM lesson_audio').get().n,0);
   f.setVoiceFailure(false);assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body})).status,200);assert.ok((await f.request('state')).data.lessons.every(l=>l.audioReady));assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM lesson_audio').get().n,1);
@@ -311,7 +311,7 @@ test('legacy assigned task prepares audio once and edited instruction gets diffe
  const f=fixture();try{
   const child=await f.profile(),photo=(await f.upload()).data,draft=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];
   f.sqlite.prepare("UPDATE lessons SET status='approved',child_id=? WHERE id=?").run(child.id,draft.id);
-  assert.equal((await f.request('lessons/'+draft.id+'/audio')).status,404);
+  f.sqlite.prepare('DELETE FROM lesson_audio').run();f.voiceCalls.length=0;assert.equal((await f.request('lessons/'+draft.id+'/audio')).status,404);
   const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];
   assert.equal((await f.request('lessons/'+draft.id+'/audio',{method:'POST',user:null,cookie})).status,200);assert.equal((await f.request('lessons/'+draft.id+'/audio',{method:'POST',user:null,cookie})).status,200);assert.equal(f.voiceCalls.length,1);
   const updated={...exercise,prompt:'Busca la letra M entre estas opciones.'};f.sqlite.prepare("UPDATE lessons SET content=?,status='draft',revision=revision+1 WHERE id=?").run(JSON.stringify(updated),draft.id);
@@ -372,3 +372,4 @@ test('saved photos can be reanalyzed without upload, preserving history and requ
 });
 
 test('letter counts accept numeric labels with the word letras',()=>{assert.equal(validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Amantina'?",options:['7 letras','8 letras','9 letras'],answer:'8 letras'}).answer,'8 letras');assert.throws(()=>validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Amantina'?",options:['7 letras','8 letras','9 letras'],answer:'9 letras'}));});
+test('draft-only corrections prepare question audio without assignment or losing attempts',async()=>{const f=fixture();try{const child=await f.profile(),photo=(await f.upload()).data,draft=(await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).data.drafts[0];assert.equal(f.voiceCalls[0].input,exercise.prompt);const saved=await f.request('lessons/'+draft.id,{method:'PATCH',body:{...draft,context:'Observa las letras.',prompt:'¿Dónde está la letra M?',draftOnly:true,reviewed:true}});assert.equal(saved.status,200);assert.equal(saved.data.lesson.status,'draft');assert.deepEqual(saved.data.lesson.assignedTo,[]);assert.equal(saved.data.lesson.audioReady,true);const state=(await f.request('state')).data;assert.equal(state.lessons.length,0);assert.equal(state.drafts.length,1);assert.equal(saved.data.lesson.revision,2);assert.equal(f.voiceCalls.at(-1).input,'¿Dónde está la letra M?');}finally{f.sqlite.close()}});

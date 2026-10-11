@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {validateLesson} from '../server/practice.mjs';
+import {audioHash,narration} from '../server/lesson-audio.mjs';
+const base={type:'select',title:'Letras',prompt:'¿Cuántas letras tiene «Omar»?',options:['4 letras','5 letras','6 letras'],answer:'4 letras'};
+test('question-only narration excludes context, distractors and solution metadata',async()=>{assert.equal(narration({...base,context:'Información visible',analysis:{explanation:'La solución es 4'}}),base.prompt);assert.equal(await audioHash(base),await audioHash({...base,options:['4 letras','7 letras','8 letras']}));assert.notEqual(await audioHash(base),await audioHash({...base,prompt:'¿Cuántas letras tiene «Ismael»?'}));});
+test('length and incomplete phrases are rejected without clipping; complete 60-character options accepted',()=>{assert.throws(()=>validateLesson({...base,prompt:'x'.repeat(121)}));assert.throws(()=>validateLesson({...base,options:['4 letras','Contando las…','6 letras']}));assert.throws(()=>validateLesson({...base,context:'x'.repeat(301)}));assert.equal(validateLesson({...base,context:'Lee el nombre.'}).context,'Lee el nombre.');assert.throws(()=>validateLesson({...base,options:['4 letras','4 LETRAS','6 letras']}));assert.throws(()=>validateLesson({...base,prompt:'¿Cuál nombre tiene más letras?',options:['Homero','Ismael','Omar'],answer:'Homero'}));});
