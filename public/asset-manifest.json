@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "ac3fd3f5ae3ddc89",
+  "version": "63905bb1dc862d1b",
   "assets": [
     {
       "path": "android-download.js",
@@ -165,7 +165,7 @@
     {
       "path": "version.js",
       "bytes": 36,
-      "sha256": "e9aa29cdc0dacbd3374b24d916d1f3523d9af82bdb40bf6342b0b8b1d04dee2e"
+      "sha256": "6ec5a6261ff96914891cd264a25ebea7b8781477ddbc94cff5de9d5cc1429aa8"
     }
   ]
 }
