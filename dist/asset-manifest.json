@@ -1,11 +1,81 @@
 {
   "schemaVersion": 1,
-  "version": "48f2bc77369c6fab",
+  "version": "b22094b2def30568",
   "assets": [
     {
       "path": "app.js",
-      "bytes": 38766,
-      "sha256": "b0dacc7cb08d8ce22e572a046e9d00a2c93387df16f52977fb23c20ccaa2099a"
+      "bytes": 40825,
+      "sha256": "37ea7f3f8ac23bd8259d300d206f26031ba61e67eb18a98f4f7be623ab291405"
+    },
+    {
+      "path": "assets/audio/catalog.json",
+      "bytes": 4511,
+      "sha256": "6b0418329fe37cd68c92a25382953618df96d98ba985b7a3948ed9d64b7acbe2"
+    },
+    {
+      "path": "assets/audio/complete-mano.mp3",
+      "bytes": 65898,
+      "sha256": "21676a7d587a68320c52c40bbebeea00ab2c84ab07266c9ac1667f975ff2a689"
+    },
+    {
+      "path": "assets/audio/feedback-done.mp3",
+      "bytes": 80004,
+      "sha256": "c2379a7e7ce3ba4f2024cf411eb3546248fa597a96dc8ea5bb4fa74e817ef761"
+    },
+    {
+      "path": "assets/audio/free-m.mp3",
+      "bytes": 105081,
+      "sha256": "b8a1244d153e5a6b71f0b27b8e6ad72dd3af93a198ff91a21ebc4311f5ad4d52"
+    },
+    {
+      "path": "assets/audio/letter-eme.mp3",
+      "bytes": 9943,
+      "sha256": "d633eb58ebfe817cd808569beab60e68c199ff41f2f3f402b9addd7fd4944bd6"
+    },
+    {
+      "path": "assets/audio/letter-m.mp3",
+      "bytes": 42231,
+      "sha256": "f23b047ced08d19f852ca262c7064edd7220423066014223a3f622810d2b39e0"
+    },
+    {
+      "path": "assets/audio/letter-o.mp3",
+      "bytes": 8689,
+      "sha256": "4e4a1701660cd43e7a97d38086f7111ed32e83c099ba9919b01cd7fa8d6fda38"
+    },
+    {
+      "path": "assets/audio/match-sol.mp3",
+      "bytes": 78593,
+      "sha256": "a3cf0b06a09dd31923d9bdad4a9e98be2939a846f83b6e8e22690de5064b6f95"
+    },
+    {
+      "path": "assets/audio/read-sol.mp3",
+      "bytes": 43485,
+      "sha256": "4b381687589c6ea0aebd755c4b13ba1978728062026e5f41e8eba4db03b106e7"
+    },
+    {
+      "path": "assets/audio/trace-o.mp3",
+      "bytes": 88154,
+      "sha256": "ee97a071d7badc06cc64310dfc2ee5743d8cd8c4e2048b6334a76d864c93a317"
+    },
+    {
+      "path": "assets/audio/word-flor.mp3",
+      "bytes": 5398,
+      "sha256": "19a1013d5936c2c97aa32623c06949c833090e118818ded9b8add0dcf68e3d19"
+    },
+    {
+      "path": "assets/audio/word-luna.mp3",
+      "bytes": 5711,
+      "sha256": "a024b1f535977abdd41e84e693867ef63e83b225b91803cc0eb37655a29d46f7"
+    },
+    {
+      "path": "assets/audio/word-mano.mp3",
+      "bytes": 5555,
+      "sha256": "2f7200c5ed18342a0a687036b1ebd198589fb57f23b70ee6f30ce936fd5f9f6b"
+    },
+    {
+      "path": "assets/audio/word-sol.mp3",
+      "bytes": 5711,
+      "sha256": "f92bd21f84c7cadf8380f4dbfba6ae1236691e3bfb433f7ba8a0fa94c349c22e"
     },
     {
       "path": "assets/garden.svg",
@@ -23,9 +93,14 @@
       "sha256": "4e2c6eca336e81df0937d7eb1a3190f4539b87a0f5229d6054efb67616e7b617"
     },
     {
+      "path": "audio.js",
+      "bytes": 1232,
+      "sha256": "fd9e070d224716d73da75dc1c5ce52d6755168770d2eb764e75f3d76ec2f3640"
+    },
+    {
       "path": "data.js",
-      "bytes": 2423,
-      "sha256": "2a7ca707650e80a7f04d75305f195224648024bf05524936003d35b28a7c5a8d"
+      "bytes": 2673,
+      "sha256": "86a991e570ca26b8136e3c2d1771115b6bf0f7ece5a201c244582e654a0bf424"
     },
     {
       "path": "index.html",
