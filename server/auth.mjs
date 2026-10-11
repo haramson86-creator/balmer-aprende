@@ -6,10 +6,10 @@ export const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.dig
 const first=(db,sql,...args)=>db.prepare(sql).bind(...args).first();
 const run=(db,sql,...args)=>db.prepare(sql).bind(...args).run();
 const cookie=(request,key,value,age)=>`${key}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${new URL(request.url).protocol==='https:'?'; Secure':''}`;
-function result(request,value,{child,parent,logout=false}={}){
+function result(request,value,{child,parent,parentAge=8*3600,logout=false}={}){
  const headers=new Headers({'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
  if(child){headers.append('Set-Cookie',cookie(request,'aprende_child',child,7*86400));}
- if(parent)headers.append('Set-Cookie',cookie(request,'aprende_parent_access',parent,8*3600));
+ if(parent)headers.append('Set-Cookie',cookie(request,'aprende_parent_access',parent,parentAge));
  if(logout){headers.append('Set-Cookie',cookie(request,'aprende_parent_access','',0));headers.append('Set-Cookie',cookie(request,'aprende_child','',0));headers.append('Set-Cookie',cookie(request,'aprende_native','',0));}
 
  return new Response(JSON.stringify(value),{headers});
@@ -29,8 +29,8 @@ export async function authRoute(request,env,user,path,body){
   const initial=initialPin(env,user);if(initial){await run(db,'INSERT INTO parent_pins(owner,pin_hash,created_at) VALUES(?,?,?) ON CONFLICT(owner) DO NOTHING',user.userId,initial,now());}
   if(path.endsWith('/setup')){const saved=await run(db,'INSERT INTO parent_pins(owner,pin_hash,created_at) VALUES(?,?,?) ON CONFLICT(owner) DO NOTHING',user.userId,await makePinHash(body.pin),now());check(saved.meta.changes===1,409,'Tu código ya está configurado. Utiliza la pantalla de entrada.');}
   else{const record=await first(db,'SELECT pin_hash FROM parent_pins WHERE owner=?',user.userId);check(record&&await validPin(body.pin,record.pin_hash),403,'Código de padre incorrecto.');}
-  const token=random();await run(db,'INSERT INTO parent_access_sessions(token_hash,owner,expires_at,created_at) VALUES(?,?,?,?)',await hash(token),user.userId,new Date(Date.now()+8*3600000).toISOString(),now());
-  return result(request,{ok:true,role:'parent'},{parent:token});
+  const age=body.remember===false?8*3600:30*86400,token=random();await run(db,'INSERT INTO parent_access_sessions(token_hash,owner,email,expires_at,created_at) VALUES(?,?,?,?,?)',await hash(token),user.userId,user.email||null,new Date(Date.now()+age*1000).toISOString(),now());
+  return result(request,{ok:true,role:'parent'},{parent:token,parentAge:age});
  }
  if(path==='/api/auth/logout'){const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_child=([a-f0-9]{64})(?:;|$)/)?.[1];if(token)await run(db,'DELETE FROM child_sessions WHERE token_hash=?',await hash(token));const parent=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_parent_access=([a-f0-9]{64})(?:;|$)/)?.[1];if(parent)await run(db,'DELETE FROM parent_access_sessions WHERE token_hash=?',await hash(parent));return result(request,{ok:true},{logout:true});}
  if(path==='/api/auth/child'){
@@ -51,5 +51,6 @@ export async function createChildCode(db,owner,childId){
 export async function makePinHash(pin){const salt=crypto.getRandomValues(new Uint8Array(16));const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:100000,hash:'SHA-256'},key,256);return Array.from(salt,b=>b.toString(16).padStart(2,'0')).join('')+':'+Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,'0')).join('');}
 async function validPin(pin,stored){const [salt,digest]=stored.split(':');const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:Uint8Array.from(salt.match(/../g),b=>parseInt(b,16)),iterations:100000,hash:'SHA-256'},key,256);const actual=Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,'0')).join('');let mismatch=0;for(let i=0;i<digest.length;i++)mismatch|=digest.charCodeAt(i)^actual.charCodeAt(i);return mismatch===0;}
 export async function parentStatus(request,db,owner){const pin=await first(db,'SELECT owner FROM parent_pins WHERE owner=?',owner);const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_parent_access=([a-f0-9]{64})(?:;|$)/)?.[1];const session=token?await first(db,'SELECT owner FROM parent_access_sessions WHERE owner=? AND token_hash=? AND expires_at>?',owner,await hash(token),now()):null;return {pinConfigured:!!pin,unlocked:!!session};}
+export async function rememberedParent(request,db){const token=request.headers.get('cookie')?.match(/(?:^|;\s*)aprende_parent_access=([a-f0-9]{64})(?:;|$)/)?.[1];if(!token)return null;const session=await first(db,'SELECT owner,email FROM parent_access_sessions WHERE token_hash=? AND expires_at>?',await hash(token),now());return session?.email?{userId:session.owner,email:session.email}:null;}
 
 export function initialPin(env,user){return user?.email?.toLowerCase()===env.INITIAL_PARENT_EMAIL?.toLowerCase()&&/^[a-f0-9]{32}:[a-f0-9]{64}$/.test(env.INITIAL_PARENT_PIN_HASH||'')?env.INITIAL_PARENT_PIN_HASH:null;}

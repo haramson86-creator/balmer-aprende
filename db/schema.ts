@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 export const profiles = sqliteTable('profiles', {id:text('id').primaryKey(),owner:text('owner').notNull(),name:text('name').notNull(),createdAt:text('created_at').notNull()},t=>[index('profiles_owner').on(t.owner)]);
 export const materials = sqliteTable('materials', {id:text('id').primaryKey(),owner:text('owner').notNull(),name:text('name').notNull(),objectKey:text('object_key').notNull(),mime:text('mime').notNull(),bytes:integer('bytes').notNull(),createdAt:text('created_at').notNull()},t=>[index('materials_owner').on(t.owner)]);
 export const generations = sqliteTable('generations', {id:text('id').primaryKey(),owner:text('owner').notNull(),materialId:text('material_id').notNull(),status:text('status').notNull(),createdAt:text('created_at').notNull()},t=>[index('generations_owner_time').on(t.owner,t.createdAt)]);
@@ -13,7 +13,10 @@ export const childCodes = sqliteTable('child_codes', {codeHash:text('code_hash')
 export const authLimits = sqliteTable('auth_limits', {key:text('key').primaryKey(),count:integer('count').notNull(),expiresAt:text('expires_at').notNull()});
 
 export const parentPins = sqliteTable('parent_pins', {owner:text('owner').primaryKey(),pinHash:text('pin_hash').notNull(),createdAt:text('created_at').notNull()});
-export const parentAccessSessions = sqliteTable('parent_access_sessions', {tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('parent_access_owner').on(t.owner)]);
+export const parentAccessSessions = sqliteTable('parent_access_sessions', {tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),email:text('email'),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('parent_access_owner').on(t.owner)]);
 export const deletionQueue = sqliteTable('deletion_queue', {objectKey:text('object_key').primaryKey(),owner:text('owner').notNull(),createdAt:text('created_at').notNull()},t=>[index('deletion_queue_owner').on(t.owner)]);
 export const nativeTickets = sqliteTable('native_tickets', {ticketHash:text('ticket_hash').primaryKey(),challenge:text('challenge').notNull(),owner:text('owner').notNull(),email:text('email').notNull(),expiresAt:text('expires_at').notNull()});
 export const nativeSessions = sqliteTable('native_sessions', {tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),email:text('email').notNull(),expiresAt:text('expires_at').notNull()});
+export const familyMembers = sqliteTable('family_members',{owner:text('owner').notNull(),userId:text('user_id').notNull(),email:text('email').notNull(),createdAt:text('created_at').notNull()},t=>[primaryKey({columns:[t.owner,t.userId]}),index('family_members_user').on(t.userId)]);
+export const familyInvites = sqliteTable('family_invites',{tokenHash:text('token_hash').primaryKey(),owner:text('owner').notNull(),email:text('email').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()});
+export const familyPreferences = sqliteTable('family_preferences',{userId:text('user_id').primaryKey(),owner:text('owner').notNull()});

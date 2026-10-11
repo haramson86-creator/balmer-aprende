@@ -174,6 +174,61 @@ test('Android handoff requires hosted identity, verifier, single use and parent 
  }finally{f.sqlite.close()}
 });
 
+test('remembered parent survives missing platform identity, expires and signs out',async()=>{
+ const f=fixture();try{
+  const login=await f.request('auth/parent/setup',{method:'POST',body:{pin:'2468',remember:true}});const cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  assert.match(login.response.headers.get('Set-Cookie'),/Max-Age=2592000/);
+  const resumed=await f.request('session',{user:null,cookie});assert.equal(resumed.data.authenticated,true);assert.equal(resumed.data.parentEmail,'family-a@example.test');
+  const short=await f.request('auth/parent/verify',{method:'POST',body:{pin:'2468',remember:false}});assert.match(short.response.headers.get('Set-Cookie'),/Max-Age=28800/);
+  await f.request('auth/logout',{method:'POST',user:null,cookie,body:{}});assert.equal((await f.request('session',{user:null,cookie})).data.authenticated,false);
+  const again=await f.request('auth/parent/verify',{method:'POST',body:{pin:'2468'}});const stale=again.response.headers.get('Set-Cookie').split(';')[0];f.sqlite.prepare("UPDATE parent_access_sessions SET expires_at='2000-01-01T00:00:00Z'").run();assert.equal((await f.request('session',{user:null,cookie:stale})).data.authenticated,false);
+ }finally{f.sqlite.close()}
+});
+
+test('shared parents join by bound email, collaborate and lose access immediately on removal',async()=>{
+ const f=fixture();try{
+  await f.request('family',{method:'PUT',body:{name:'Familia compartida'}});await f.request('family',{method:'PUT',user:'family-b',body:{name:'Familia B'}});
+  const child=await f.profile(),ownB=await f.profile('family-b');
+  const invite=await f.request('family/invitations',{method:'POST',body:{email:'FAMILY-B@example.test'}});assert.equal(invite.status,201);
+  assert.notEqual(f.sqlite.prepare('SELECT token_hash FROM family_invites').get().token_hash,invite.data.code);
+  assert.equal((await f.request('family/invitations/accept',{method:'POST',user:'family-c',body:{code:invite.data.code}})).status,403);
+  const accepted=await f.request('family/invitations/accept',{method:'POST',user:'family-b',body:{code:invite.data.code}});assert.equal(accepted.status,200);
+  const shared=await f.request('session',{user:'family-b'});assert.equal(shared.data.family.name,'Familia compartida');assert.equal(shared.data.family.isOwner,false);assert.equal(shared.data.profiles[0].id,child.id);assert.equal(shared.data.families.length,2);
+  assert.equal((await f.request('family/invitations/accept',{method:'POST',user:'family-b',body:{code:invite.data.code}})).status,403);
+  assert.equal((await f.request('family',{method:'DELETE',user:'family-b',body:{confirmName:'Familia compartida'}})).status,403);
+  assert.equal((await f.request('family',{method:'PUT',user:'family-b',body:{name:'Hack'}})).status,403);
+  assert.equal((await f.request('family/invitations',{method:'POST',user:'family-b',body:{email:'family-c@example.test'}})).status,403);
+  assert.equal((await f.request('profiles/'+child.id,{method:'PATCH',user:'family-b',body:{name:'Nuevo nombre'}})).status,200);
+  const photo=await f.upload('family-b');assert.equal(photo.status,201);assert.equal((await f.request('state')).data.materials[0].id,photo.data.id);
+  const generation=await f.request('generations',{method:'POST',user:'family-b',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}});const draft=generation.data.drafts[0];
+  const approved=await f.request('lessons/'+draft.id,{method:'PATCH',user:'family-b',body:{...draft,childId:child.id,reviewed:true}});assert.equal(approved.status,200);
+  const childLogin=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}});const cookie=childLogin.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('family/invitations',{method:'POST',user:null,cookie,body:{email:'family-c@example.test'}})).status,403);
+  const attempt={id:crypto.randomUUID(),childId:child.id,activityId:draft.id,activityRevision:approved.data.lesson.revision,answer:draft.answer};assert.equal((await f.request('attempts',{method:'POST',user:null,cookie,body:attempt})).status,200);
+  assert.equal((await f.request('state',{user:'family-b'})).data.attempts.length,1);assert.equal((await f.request('state',{user:null,cookie})).data.attempts.length,1);
+  assert.equal((await f.request('family/select',{method:'POST',user:'family-b',body:{familyId:'family-b'}})).status,200);assert.equal((await f.request('session',{user:'family-b'})).data.profiles[0].id,ownB.id);
+  await f.request('family/select',{method:'POST',user:'family-b',body:{familyId:'family-a'}});
+  assert.equal((await f.request('family/members',{method:'DELETE',body:{userId:'family-b'}})).status,200);
+  assert.equal((await f.request('session',{user:'family-b'})).data.family.name,'Familia B');assert.equal((await f.request('materials/'+photo.data.id,{user:'family-b'})).status,404);assert.equal((await f.request('family/select',{method:'POST',user:'family-b',body:{familyId:'family-a'}})).status,403);
+  assert.ok(f.sqlite.prepare("SELECT id FROM audit WHERE action='profile.renamed:family-b'").get());
+ }finally{f.sqlite.close()}
+});
+
+test('expired and revoked invitations fail and child deletion preserves reference as draft',async()=>{
+ const f=fixture();try{
+  await f.request('family',{method:'PUT',body:{name:'Familia'}});const child=await f.profile(),sibling=await f.profile();
+  let invite=await f.request('family/invitations',{method:'POST',body:{email:'family-b@example.test'}});f.sqlite.prepare("UPDATE family_invites SET expires_at='2000-01-01T00:00:00Z'").run();assert.equal((await f.request('family/invitations/accept',{method:'POST',user:'family-b',body:{code:invite.data.code}})).status,403);
+  invite=await f.request('family/invitations',{method:'POST',body:{email:'family-b@example.test'}});await f.request('family/invitations',{method:'DELETE',body:{email:'family-b@example.test'}});assert.equal((await f.request('family/invitations/accept',{method:'POST',user:'family-b',body:{code:invite.data.code}})).status,403);
+  const photo=await f.upload(),g=await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}});const draft=g.data.drafts[0];const approved=await f.request('lessons/'+draft.id,{method:'PATCH',body:{...draft,childId:child.id,reviewed:true}});const task=approved.data.lesson;
+  assert.equal((await f.request('lessons/'+task.id+'/assignment',{method:'PATCH',user:'family-b',body:{childId:sibling.id,revision:task.revision}})).status,404);
+  assert.equal((await f.request('lessons/'+task.id+'/assignment',{method:'PATCH',body:{childId:sibling.id,revision:task.revision,copy:true,id:crypto.randomUUID()}})).status,200);assert.equal((await f.request('state')).data.lessons.length,2);
+  assert.equal((await f.request('lessons/'+task.id+'/assignment',{method:'PATCH',body:{childId:sibling.id,revision:task.revision+1}})).status,409);
+  assert.equal((await f.request('profiles/'+child.id,{method:'DELETE',body:{confirmName:'Incorrecto'}})).status,400);
+  assert.equal((await f.request('profiles/'+child.id,{method:'DELETE',body:{confirmName:child.name}})).status,200);const state=await f.request('state');assert.equal(state.data.lessons.length,1);assert.equal(state.data.drafts.length,1);assert.equal(state.data.materials.length,1);
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}})).status,401);
+ }finally{f.sqlite.close()}
+});
+
 test('configured parent code is bound to trusted email and requires leaving child access',async()=>{
  const f=fixture();try{
   f.env.INITIAL_PARENT_EMAIL='family-a@example.test';f.env.INITIAL_PARENT_PIN_HASH=await makePinHash('3579');
