@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "version": "48f2bc77369c6fab",
+  "assets": [
+    {
+      "path": "app.js",
+      "bytes": 38766,
+      "sha256": "b0dacc7cb08d8ce22e572a046e9d00a2c93387df16f52977fb23c20ccaa2099a"
+    },
+    {
+      "path": "assets/garden.svg",
+      "bytes": 2160,
+      "sha256": "d293df2cc73bf09c3ffa99831c22ff0bb7f70d61adba92b55aee61d05b1b3c7b"
+    },
+    {
+      "path": "assets/icon.svg",
+      "bytes": 452,
+      "sha256": "9483766cd7227458f2a05a6baa9631fcc8e5d8c3e572ad1dc7d3d4bc9b8a358b"
+    },
+    {
+      "path": "assets/success.wav",
+      "bytes": 22094,
+      "sha256": "4e2c6eca336e81df0937d7eb1a3190f4539b87a0f5229d6054efb67616e7b617"
+    },
+    {
+      "path": "data.js",
+      "bytes": 2423,
+      "sha256": "2a7ca707650e80a7f04d75305f195224648024bf05524936003d35b28a7c5a8d"
+    },
+    {
+      "path": "index.html",
+      "bytes": 764,
+      "sha256": "0b17822bb9b15d9a4e5605d2336c4be014b846c79f75423be43a9fc99e26c3a4"
+    },
+    {
+      "path": "manifest.webmanifest",
+      "bytes": 284,
+      "sha256": "28ddd74b01b1d31130ffca5485712a3ba3fc661f1ca77597d4170fe170b9a4bb"
+    },
+    {
+      "path": "offline.js",
+      "bytes": 1621,
+      "sha256": "579903190ee4c60e1a5e85dc512c9e2db09a8496788fc21b348009c6174f4681"
+    },
+    {
+      "path": "scoring.js",
+      "bytes": 4437,
+      "sha256": "a30ce99cea2f808629b37c9c77b6b8389da1f9bc1b2db140f3942a911612a572"
+    },
+    {
+      "path": "store.js",
+      "bytes": 2246,
+      "sha256": "00684ce753c766f3ba6256ffbf3a163960fb57bd8356e42ffd2ebda7de9b19bb"
+    },
+    {
+      "path": "styles.css",
+      "bytes": 21185,
+      "sha256": "eee8e55c389fc8f2dde138f284d75f9838bcd01df0ea72253cf08fcf38eadd66"
+    }
+  ]
+}
