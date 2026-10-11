@@ -4,6 +4,7 @@ export async function taskLifecycle(db,owner,path,method,body,actorId){
  const match=path.match(/^\/api\/(materials|lessons)\/([a-zA-Z0-9-]+)\/lifecycle$/);if(!match||method!=='PATCH')return null;
  const [,table,id]=match;const record=await db.prepare(`SELECT * FROM ${table} WHERE id=? AND owner=?`).bind(id,owner).first();check(record,404,'Contenido no encontrado.');
  check(['archive','restore','repeat','rename'].includes(body.action),400,'Acción no válida.');
+ if(table==='lessons'&&['restore','repeat'].includes(body.action))check(!JSON.parse(record.content).supersededBy,409,'Este ejercicio fue sustituido por un nuevo análisis. Revisa y confirma los nuevos borradores.');
  const stamp=new Date().toISOString();let entity=id;
  if(body.action==='rename'){check(table==='materials'&&typeof body.name==='string'&&body.name.trim().length>0&&body.name.trim().length<=70,400,'Escribe un título de hasta 70 caracteres.');await db.prepare('UPDATE materials SET name=? WHERE id=? AND owner=?').bind(body.name.trim(),id,owner).run();}
  else if(body.action==='repeat'){

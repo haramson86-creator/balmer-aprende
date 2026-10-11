@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "6aba7e300aae08b8",
+  "version": "c97caf0c66d2f340",
   "assets": [
     {
       "path": "android-download.js",
@@ -124,8 +124,8 @@
     },
     {
       "path": "cloud.js",
-      "bytes": 29673,
-      "sha256": "e6ec526d117d50dead8ca1350b721e205f5282d2e4f2967873b3851eed0c3bcf"
+      "bytes": 31037,
+      "sha256": "d1c4f5985a9764e47a7dd23733a708a9efe6167bc2b812cf3986bf8974f65ef7"
     },
     {
       "path": "data.js",
@@ -179,8 +179,8 @@
     },
     {
       "path": "task-library.js",
-      "bytes": 6837,
-      "sha256": "ac0289b77b37a745326611bef8b7cc3f33542b9312117fee0514bcbda67233f1"
+      "bytes": 7105,
+      "sha256": "82629804fd19300e68cca68b16381662775dc935d2e9ca4b173d81c9536fc3cf"
     },
     {
       "path": "version.js",

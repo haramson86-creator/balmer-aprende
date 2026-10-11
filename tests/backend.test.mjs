@@ -16,13 +16,13 @@ function fixture(exerciseCount=1){
   const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){const result=sqlite.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}}}}},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results}catch(e){sqlite.exec('ROLLBACK');throw e}}};
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
-  let voiceFailure=false;const voiceCalls=[];
-  const fetcher=async(url,options)=>{if(JSON.parse(options.body).text?.format?.name==='reading_analysis')return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,pageSummary:'Reconocimiento de letras del cuaderno.',warnings:[],tasks:[{instruction:exercise.prompt,sourceText:'M L S',expectedAnswers:['M'],explanation:'La M aparece entre las opciones.',ambiguities:[]}]})}]}]});if(url.endsWith('/audio/speech')){voiceCalls.push(JSON.parse(options.body));return voiceFailure?new Response('quota',{status:429}):new Response(wavFixture(),{headers:{'Content-Type':'audio/wav'}});}calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:''),analysis:{objective:'Reconocer la letra M',sourceEvidence:'La página muestra M, L y S.',explanation:'La letra solicitada es M.',warnings:[],optionChecks:exercise.options.map(option=>({option,correct:option===exercise.answer,explanation:option===exercise.answer?'Es la letra solicitada.':'Es una letra diferente.'}))}}))})}]}]})};
+  let aiFailure=false,voiceFailure=false;const voiceCalls=[];
+  const fetcher=async(url,options)=>{if(aiFailure&&!url.endsWith('/audio/speech'))return new Response('failed',{status:500});if(JSON.parse(options.body).text?.format?.name==='reading_analysis')return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,pageSummary:'Reconocimiento de letras del cuaderno.',warnings:[],tasks:[{instruction:exercise.prompt,sourceText:'M L S',expectedAnswers:['M'],explanation:'La M aparece entre las opciones.',ambiguities:[]}]})}]}]});if(url.endsWith('/audio/speech')){voiceCalls.push(JSON.parse(options.body));return voiceFailure?new Response('quota',{status:429}):new Response(wavFixture(),{headers:{'Content-Type':'audio/wav'}});}calls.push({url,body:JSON.parse(options.body)});return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,message:'Página legible',exercises:Array.from({length:exerciseCount},(_,i)=>({...exercise,title:exercise.title+(i?' '+i:''),analysis:{objective:'Reconocer la letra M',sourceEvidence:'La página muestra M, L y S.',explanation:'La letra solicitada es M.',warnings:[],optionChecks:exercise.options.map(option=>({option,correct:option===exercise.answer,explanation:option===exercise.answer?'Es la letra solicitada.':'Es una letra diferente.'}))}}))})}]}]})};
   const parentCookies=new Map();
   const request=async(path,{method='GET',body,user='family-a',cookie,skipPin=false,headers={},origin='https://aprende.test'}={})=>{if(user&&!cookie&&!skipPin&&!path.startsWith('auth/')){if(!parentCookies.has(user)){const setup=await request('auth/parent/setup',{method:'POST',body:{pin:'3579'},user,skipPin:true});parentCookies.set(user,setup.response.headers.get('Set-Cookie').split(';')[0]);}cookie=parentCookies.get(user);}const response=await handleAPI(new Request('https://aprende.test/api/'+path,{method,headers:{...headers,Origin:origin,'X-Aprende-Request':'1',...(cookie?{Cookie:cookie}:{}),...(body instanceof FormData?{}:body?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined}),env,user?{userId:user,email:user+'@example.test'}:null,{fetcher});return {response,status:response.status,data:response.headers.get('Content-Type')?.includes('json')?await response.json():null}};
   const profile=async(user='family-a')=>(await request('profiles',{method:'POST',user,body:{name:'Perfil de prueba'}})).data;
   let uploadIndex=0;const upload=async(user='family-a',marker=++uploadIndex)=>{const photo=new FormData();photo.append('consent','yes');photo.append('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKXYAAAAASUVORK5CYII=','base64'),Uint8Array.of(marker)],{type:'image/png'}),'example.png');return request('materials',{method:'POST',body:photo,user})};
-  return {sqlite,env,request,profile,upload,calls,objects,voiceCalls,setVoiceFailure(value){voiceFailure=value}};
+  return {sqlite,env,request,profile,upload,calls,objects,voiceCalls,setAiFailure(value){aiFailure=value},setVoiceFailure(value){voiceFailure=value}};
 }
 
 test('photo → draft → adult approval → child execution uses persisted isolated records',async()=>{
@@ -344,5 +344,29 @@ test('legacy ambiguous tasks are withheld, cannot score, and parent correction p
  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,0);assert.equal((await f.request('state')).data.libraryLessons[0].needsCorrection,true);
  assert.equal((await f.request('attempts',{method:'POST',user:null,cookie,body:{id:crypto.randomUUID(),childId:child.id,activityId:d.id,activityRevision:1,answer:'Homero'}})).status,409);
  const fixed={...bad,prompt:'¿Qué nombres tienen la mayor cantidad de letras?',options:['Homero','Omar','Homero e Ismael'],answer:'Homero e Ismael',revision:1,reviewed:true,childId:child.id};const saved=await f.request('lessons/'+d.id,{method:'PATCH',body:fixed});assert.equal(saved.status,200);assert.equal(saved.data.lesson.revision,2);assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,1);
+ }finally{f.sqlite.close()}
+});
+
+test('saved photos can be reanalyzed without upload, preserving history and requiring new parent approval',async()=>{
+ const f=fixture();try{
+  const child=await f.profile(),photo=(await f.upload()).data;
+  const generate=body=>f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true,...body}});
+  const old=(await generate()).data.drafts[0];await f.request('lessons/'+old.id,{method:'PATCH',body:{...old,reviewed:true,childId:child.id}});
+  const attempt={id:crypto.randomUUID(),childId:child.id,activityId:old.id,activityRevision:2,answer:'M'};assert.equal((await f.request('attempts',{method:'POST',body:attempt})).status,200);
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}}),cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  const requestBody={id:crypto.randomUUID(),materialId:photo.id,consent:true,reanalyze:true};
+  assert.equal((await f.request('generations',{method:'POST',user:null,cookie,body:requestBody})).status,403);
+  assert.equal((await f.request('generations',{method:'POST',user:'family-b',body:requestBody})).status,404);
+  assert.equal((await generate({reanalyze:true,consent:false})).status,400);
+  f.setAiFailure(true);assert.equal((await generate({reanalyze:true})).status,502);assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,1);f.setAiFailure(false);
+  const next=await f.request('generations',{method:'POST',body:requestBody});assert.equal(next.status,201);assert.notEqual(next.data.drafts[0].id,old.id);assert.equal(f.objects.size,2); // original photo plus existing audio
+  const state=(await f.request('state')).data;assert.equal(state.drafts.length,1);assert.equal(state.libraryLessons.find(l=>l.id===old.id).supersededBy,requestBody.id);assert.equal(state.attempts.length,1);
+  assert.equal((await f.request('state',{user:null,cookie})).data.lessons.length,0);
+  assert.equal((await f.request('lessons/'+old.id+'/lifecycle',{method:'PATCH',body:{action:'restore'}})).status,409);
+  assert.equal((await f.request('generations',{method:'POST',body:requestBody})).data.drafts[0].id,next.data.drafts[0].id);
+  const draft=next.data.drafts[0],confirm={materialId:photo.id,childId:child.id,reviewed:true,lessons:[{id:draft.id,revision:1}]};
+  assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:{...confirm,reviewed:false}})).status,400);
+  assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:confirm})).status,200);assert.equal((await f.request('state',{user:null,cookie})).data.lessons[0].id,draft.id);
+  const again=await generate({reanalyze:true});assert.equal(again.status,201);assert.equal((await f.request('state')).data.drafts.length,1);
  }finally{f.sqlite.close()}
 });

@@ -59,3 +59,9 @@ La generación realiza dos peticiones independientes: primero analiza consignas,
 Se aplican además controles deterministas sobre conteos de letras explícitos, comparaciones de longitud entre nombres/palabras y empates, y opciones equivalentes por mayúsculas o Unicode. Las contradicciones detectables en ejercicios anteriores se señalan al padre y se retiran temporalmente de las actividades del niño. El padre puede corregir una práctica aprobada: aumenta su revisión, conserva resultados anteriores y prepara audio nuevo. Estas comprobaciones cubren casos concretos; la revisión adulta sigue siendo necesaria para contenido general.
 
 Validación: 47 pruebas; análisis real del ejemplo Homero/Omar/Ismael devuelve Homero e Ismael como respuesta conjunta y explica 6/4/6 letras. No se modifican respuestas históricas automáticamente.
+
+## Reanalizar fotos guardadas
+
+En Biblioteca familiar, «Volver a analizar con IA» reutiliza la foto privada guardada en R2 y solicita consentimiento para enviarla otra vez. Mantiene aislamiento por familia, idempotencia, exclusión de análisis simultáneos y el límite diario. Si falla, conserva las actividades anteriores disponibles. Si termina, una transacción archiva las actividades activas anteriores con `supersededBy` y crea nuevos borradores. Los resultados y audios antiguos se conservan; las versiones sustituidas solo se consultan y no pueden reactivarse ni repetirse. Confirmar la foto considera solamente los borradores activos y prepara sus audios antes de asignarlos. No requiere nueva APK: la versión 0.5.1 carga este flujo desde el Site.
+
+Validación: 48 pruebas satisfactorias, incluido reanálisis de foto existente, fallo de IA sin pérdida, aislamiento de familias, bloqueo a niños, idempotencia, historial conservado y nueva aprobación del padre.
