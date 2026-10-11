@@ -6,7 +6,7 @@ export const letterCount=value=>[...value.normalize('NFC')].filter(c=>/\p{L}/u.t
 export function lessonQualityIssue(lesson){
  const {prompt,options,answer}=lesson;if(!Array.isArray(options)||typeof prompt!=='string')return null;
  const p=normalize(prompt),quoted=prompt.match(/[“"'«]([^”"'»]+)[”"'»]/u);
- if(/cu[aá]ntas letras/.test(p)&&quoted&&[...prompt.matchAll(/[“\"'«]([^”\"'»]+)[”\"'»]/gu)].length===1){const number=value=>value.match(/^\s*(\d+)\s*(?:letras?)?\s*$/iu)?.[1],expected=letterCount(quoted[1]);if(options.every(o=>number(o)!==undefined)&&(!options.some(o=>Number(number(o))===expected)||Number(number(answer)||-1)!==expected))return `El conteo no coincide: «${quoted[1]}» tiene ${expected} letras. Incluye esa opción y corrige la respuesta.`;}
+ if(/cu[aá]ntas letras/.test(p)&&quoted&&[...prompt.matchAll(/[“"'«]([^”"'»]+)[”"'»]/gu)].length===1){const number=value=>value.match(/^\s*(\d+)\s*(?:letras?)?\s*$/iu)?.[1],expected=letterCount(quoted[1]);if(options.every(o=>number(o)!==undefined)&&(!options.some(o=>Number(number(o))===expected)||Number(number(answer)||-1)!==expected))return `El conteo no coincide: «${quoted[1]}» tiene ${expected} letras. Incluye esa opción y corrige la respuesta.`;}
  if(/nombre|palabra/.test(p)&&/m[aá]s larg|m[aá]s cort|mayor cantidad de letras|menor cantidad de letras|m[aá]s letras|menos letras/.test(p)&&options.every(o=>/^[\p{L}\s]+$/u.test(o))){
   const groups=options.map(o=>o.split(/\s+(?:y|e)\s+/i).map(normalize)),words=[...new Set(groups.flat())];if(words.some(w=>w.includes(' ')))return null;
   const counts=words.map(letterCount),target=(/m[aá]s cort|menor|menos/.test(p)?Math.min:Math.max)(...counts),winners=words.filter(w=>letterCount(w)===target);
