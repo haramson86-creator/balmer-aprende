@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 // Import ESM regardless of the host site's package.json configuration.
-const source = await readFile(new URL('../dist/scoring.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../public/scoring.js', import.meta.url), 'utf8');
 const { guidePoints, evaluateTrace } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 for (const symbol of ['O', 'M']) {
   test(`${symbol}: exact synthetic guide scores highly, deterministically`, () => {

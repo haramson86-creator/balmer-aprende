@@ -1,6 +1,6 @@
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {webcrypto,createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-const base=fileURLToPath(new URL('../dist/',import.meta.url));let tests=0;
+const base=fileURLToPath(new URL('../public/',import.meta.url));let tests=0;
 const source=fs.readFileSync(base+'app.js','utf8');const persist=source.split('\n').find(l=>l.startsWith('async function persistResult'));
 for(const exit of ['null','replacement']){
  const ctx=vm.createContext({});vm.runInContext(`let childId='demo-luna',page='practice', attempts=[], practice={activity:{id:'a',title:'A',revision:1,type:'select'},inputMethods:new Set(),activeMs:50,busy:false,saved:false};const original=practice;let resolveSave;const uuid=()=> 'id';const pauseClock=()=>{};const resumeClock=()=>{};const toast=()=>{};const saveAttempt=()=>new Promise(r=>resolveSave=r);${persist};globalThis.run=async()=>{const result=persistResult({score:10,evaluationStatus:'scored'});practice=${exit==='null'?'null':"{saved:false,busy:false}"};page='home';resolveSave();return {result:await result,originalSaved:original.saved,nextSaved:practice?.saved,attempts:attempts.length}}`,ctx);

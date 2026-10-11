@@ -1,4 +1,10 @@
-# Aprende — prototipo vertical
+# Balmer Aprende — desarrollo conectado
+
+La versión local actual añade servidor Vite/Vinext, React y TypeScript, D1 para prácticas y R2 para fotos. Consulta [INTEGRACION.md](INTEGRACION.md) para el estado verificado, los comandos actuales y la clave de OpenAI pendiente. La fuente editable de la interfaz está ahora en `public/`; `dist/` es salida de build.
+
+Vista local: http://127.0.0.1:4180/ · `node scripts/run-framework.mjs dev --port 4180 --hostname 127.0.0.1`.
+
+## Referencia histórica del prototipo 0.3
 
 Versión 0.3 (ajuste responsive). Producto principal PWA; nombre provisional. Código estático modular HTML/CSS/JavaScript sin dependencias runtime externas. Las especificaciones completas prevén evolución a React/TypeScript si aporta valor; este corte ligero verifica el flujo local sin provisionar Firebase.
 

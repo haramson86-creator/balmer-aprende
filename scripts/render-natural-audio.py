@@ -14,7 +14,7 @@ import edge_tts
 from mutagen.mp3 import MP3
 
 ROOT = Path(__file__).resolve().parents[1]
-AUDIO = ROOT / "dist/assets/audio"
+AUDIO = ROOT / "public/assets/audio"
 VOICE = "es-MX-DaliaNeural"
 RATE = "-8%"
 

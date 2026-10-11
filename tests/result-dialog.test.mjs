@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source=fs.readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('function showResult('),source.indexOf('function bindMatch('));
 function setup(){
  const nodes=new Map(),listeners=new Map();let document;

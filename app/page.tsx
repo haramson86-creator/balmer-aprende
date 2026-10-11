@@ -1,0 +1,1 @@
+export default function Page() { return <><div id="app"><div className="initial-loader">Aprende<span>Preparando tu espacio…</span></div></div><div id="toast" role="status" aria-live="polite"/><div id="modal-root"/><script type="module" src="/app.js"/></>; }

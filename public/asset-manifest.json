@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "023b510c8faf4f37",
+  "version": "e3ba7af416f46129",
   "assets": [
     {
       "path": "app.js",
-      "bytes": 46054,
-      "sha256": "2170f6302bb13b362b73bdbd5e486ad274310027fe09216a50687c9db6866d11"
+      "bytes": 47386,
+      "sha256": "bd2f749790eda2c8175c96fa11e23a16d5c1f5f8752c9287399742f6f010743b"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -98,6 +98,11 @@
       "sha256": "fd9e070d224716d73da75dc1c5ce52d6755168770d2eb764e75f3d76ec2f3640"
     },
     {
+      "path": "cloud.js",
+      "bytes": 12487,
+      "sha256": "3e6fb3c256dcbc15f4772777b370a696e497f419b931edbd9a08e6e7a7d643f4"
+    },
+    {
       "path": "data.js",
       "bytes": 2673,
       "sha256": "86a991e570ca26b8136e3c2d1771115b6bf0f7ece5a201c244582e654a0bf424"
@@ -129,8 +134,8 @@
     },
     {
       "path": "styles.css",
-      "bytes": 33663,
-      "sha256": "13f369f54d80002027d0786d37de35fdea79f7c71fd5912a9db82f74a7ffc472"
+      "bytes": 34097,
+      "sha256": "8e44a8e5870e6c264d2aa3015c42b9efcabfdc4d6b656e6d7cd55933af384748"
     }
   ]
 }
