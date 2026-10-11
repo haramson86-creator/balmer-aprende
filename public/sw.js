@@ -1,4 +1,4 @@
-const RELEASE='3a634efa78b748c5';
+const RELEASE='f07e6620724febe6';
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 const CONTROL='aprende-control-v1';const POINTER=new URL('active-package',self.registration.scope).href;
 async function digest(buffer){const hash=await crypto.subtle.digest('SHA-256',buffer);return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('')}
