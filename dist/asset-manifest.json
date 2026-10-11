@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "ade35715cedafb0c",
+  "version": "023b510c8faf4f37",
   "assets": [
     {
       "path": "app.js",
-      "bytes": 43797,
-      "sha256": "ae65f63bf2bacc01c4c8992899391e6df0c0b6b8dd2c461052d6dd6bf9f96734"
+      "bytes": 46054,
+      "sha256": "2170f6302bb13b362b73bdbd5e486ad274310027fe09216a50687c9db6866d11"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -129,8 +129,8 @@
     },
     {
       "path": "styles.css",
-      "bytes": 31257,
-      "sha256": "97367920ad5a7fbb5721027f548492ee5d44a15562a8b4d7704de39458443f88"
+      "bytes": 33663,
+      "sha256": "13f369f54d80002027d0786d37de35fdea79f7c71fd5912a9db82f74a7ffc472"
     }
   ]
 }

@@ -48,3 +48,6 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
 Abrir http://localhost:4173 en el mismo ordenador. Ese localhost no es el localhost de una tablet diferente. La conexión USB/LAN/ADB y los permisos deben verificarse en el ordenador autorizado; no están configurados por este repositorio. Desde otro equipo por HTTP de LAN, Service Workers pueden no funcionar por falta de contexto seguro; probar offline requiere un origen admitido y seguro. No afirmar acceso a la tablet ni abrir interfaces/red sin autorización.
 
 El usuario decidió continuar en el mismo Site. La publicación del ajuste responsive se realiza tras revisión estática y regresiones; las pruebas reales en tablet siguen pendientes.
+
+## Resultado flotante (actualización 2026-10-11)
+El resultado guardado aparece en un diálogo compacto sobre el ejercicio terminado. El texto puede desplazarse sin arrastrar los botones. Escape o cerrar vuelve al ejercicio y permite reabrir el mismo resultado; no crea intentos duplicados. El diálogo bloquea la interacción de fondo y mantiene el foco de teclado. Verificación de navegador y tablet física pendiente.
