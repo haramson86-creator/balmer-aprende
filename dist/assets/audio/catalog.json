@@ -1,137 +1,150 @@
 {
   "schemaVersion": 1,
-  "language": "es-419",
-  "generation": "local_build_time_no_cloud",
+  "language": "es-MX",
+  "generation": "neural_cloud_build_time_bundled_offline",
   "clips": [
     {
       "id": "letter-m",
       "path": "assets/audio/letter-m.mp3",
       "text": "¿Cuál de estas letras es la eme? Toca la letra eme.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 6.94,
-      "bytes": 42231,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 5.23,
+      "bytes": 31392,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "complete-mano",
       "path": "assets/audio/complete-mano.mp3",
       "text": "Completa la palabra mano. Ma... ¿qué falta? Elige la sílaba que falta.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 10.87,
-      "bytes": 65898,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 8.66,
+      "bytes": 51984,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "match-sol",
       "path": "assets/audio/match-sol.mp3",
       "text": "Une cada palabra con su dibujo. Primero toca una palabra, y después la imagen que corresponde.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 12.99,
-      "bytes": 78593,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 7.92,
+      "bytes": 47520,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "trace-o",
       "path": "assets/audio/trace-o.mp3",
       "text": "Repasa la letra o. Sigue los puntos con tu dedo o con un lápiz táctil. Cuando termines, toca terminé.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 14.58,
-      "bytes": 88154,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 9.67,
+      "bytes": 58032,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "read-sol",
       "path": "assets/audio/read-sol.mp3",
       "text": "Lee con un adulto. El sol sale. ¿Qué sale?",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 7.15,
-      "bytes": 43485,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 6.07,
+      "bytes": 36432,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "free-m",
       "path": "assets/audio/free-m.mp3",
       "text": "Intenta escribir la letra eme con tu dedo o con un lápiz táctil. Cuando termines, toca terminé. Esta práctica no tiene nota.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 17.4,
-      "bytes": 105081,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 10.68,
+      "bytes": 64080,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "word-sol",
       "path": "assets/audio/word-sol.mp3",
       "text": "Sol.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 0.84,
-      "bytes": 5711,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 1.87,
+      "bytes": 11232,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "word-luna",
       "path": "assets/audio/word-luna.mp3",
       "text": "Luna.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 0.84,
-      "bytes": 5711,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 1.87,
+      "bytes": 11232,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "word-flor",
       "path": "assets/audio/word-flor.mp3",
       "text": "Flor.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 0.81,
-      "bytes": 5398,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 1.87,
+      "bytes": 11232,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "word-mano",
       "path": "assets/audio/word-mano.mp3",
       "text": "Mano.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 0.84,
-      "bytes": 5555,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 1.87,
+      "bytes": 11232,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "letter-o",
       "path": "assets/audio/letter-o.mp3",
       "text": "La letra o.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 1.34,
-      "bytes": 8689,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 2.11,
+      "bytes": 12672,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "letter-eme",
       "path": "assets/audio/letter-eme.mp3",
       "text": "La letra eme.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 1.54,
-      "bytes": 9943,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 2.18,
+      "bytes": 13104,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     },
     {
       "id": "feedback-done",
       "path": "assets/audio/feedback-done.mp3",
       "text": "¡Buen intento! Tu práctica está guardada. Puedes practicar otra vez, o seguir explorando.",
-      "voice": "es-419",
-      "engine": "espeak-ng-emscripten@0.3.5",
-      "durationSeconds": 13.24,
-      "bytes": 80004,
-      "qualityStatus": "synthetic_prototype_human_review_pending"
+      "voice": "es-MX-DaliaNeural",
+      "engine": "edge-tts@7.2.8",
+      "durationSeconds": 8.38,
+      "bytes": 50256,
+      "qualityStatus": "neural_synthetic_listening_review_pending",
+      "rate": "-8%"
     }
   ]
 }
