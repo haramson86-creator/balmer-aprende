@@ -370,3 +370,5 @@ test('saved photos can be reanalyzed without upload, preserving history and requ
   const again=await generate({reanalyze:true});assert.equal(again.status,201);assert.equal((await f.request('state')).data.drafts.length,1);
  }finally{f.sqlite.close()}
 });
+
+test('letter counts accept numeric labels with the word letras',()=>{assert.equal(validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Amantina'?",options:['7 letras','8 letras','9 letras'],answer:'8 letras'}).answer,'8 letras');assert.throws(()=>validateLesson({...exercise,prompt:"¿Cuántas letras tiene 'Amantina'?",options:['7 letras','8 letras','9 letras'],answer:'9 letras'}));});
