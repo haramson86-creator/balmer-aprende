@@ -101,8 +101,8 @@ test('family setup persists per owner and requires a parent',async()=>{
 
 test('child codes bind to one family and child, rotate and revoke all prior access',async()=>{
  const f=fixture();try{
-  const child=await f.profile();assert.match(child.code,/^[A-Z2-9]{4}(-[A-Z2-9]{4}){2}$/);
-  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}});assert.equal(login.status,200);assert.equal(login.data.role,'child');
+  const child=await f.profile();assert.match(child.code,/^(?=[A-Z2-9]*[A-Z])(?=[A-Z2-9]*[2-9])[A-Z2-9]{5}$/);
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code.toLowerCase()}});assert.equal(login.status,200);assert.equal(login.data.role,'child');
   const cookie=login.response.headers.get('Set-Cookie').split(';')[0];
   assert.equal((await f.request('session',{user:null,cookie})).data.profiles[0].id,child.id);
   assert.equal((await f.request('family',{method:'PUT',cookie,user:null,body:{name:'Prohibida'}})).status,403);

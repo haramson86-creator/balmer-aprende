@@ -36,7 +36,7 @@ export async function authRoute(request,env,user,path,body){
  if(path==='/api/auth/child'){
   await limit(db,'child-ip:'+ip,10,600);await limit(db,'child-global',1000,600);
   const code=typeof body.code==='string'?body.code.replace(/[\s-]/g,'').toUpperCase():'';
-  check(/^[A-Z2-9]{12}$/.test(code),400,'Escribe el código que te dio tu familia.');
+  check(/^(?=[A-Z2-9]*[A-Z])(?=[A-Z2-9]*[2-9])[A-Z2-9]{5}$/.test(code)||/^[A-Z2-9]{12}$/.test(code),400,'Escribe el código que te dio tu familia.');
   const access=await first(db,'SELECT owner,child_id FROM child_codes WHERE code_hash=? AND expires_at>?',await hash(code),now());check(access,401,'Código incorrecto, caducado o retirado. Pide uno nuevo a tu familia.');
   const token=random();await run(db,'INSERT INTO child_sessions(token_hash,owner,child_id,expires_at,created_at) VALUES(?,?,?,?,?)',await hash(token),access.owner,access.child_id,new Date(Date.now()+7*86400000).toISOString(),now());
   return result(request,{ok:true,role:'child'},{child:token});
@@ -44,9 +44,17 @@ export async function authRoute(request,env,user,path,body){
  return null;
 }
 export async function createChildCode(db,owner,childId){
- const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const bytes=crypto.getRandomValues(new Uint8Array(12));const code=Array.from(bytes,b=>alphabet[b%32]).join('');const expiresAt=new Date(Date.now()+30*86400000).toISOString();
- await db.batch([db.prepare('DELETE FROM child_codes WHERE owner=? AND child_id=?').bind(owner,childId),db.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),db.prepare('INSERT INTO child_codes(code_hash,owner,child_id,expires_at,created_at) VALUES(?,?,?,?,?)').bind(await hash(code),owner,childId,expiresAt,now())]);
- return {code:code.match(/.{4}/g).join('-'),expiresAt};
+ const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const expiresAt=new Date(Date.now()+30*86400000).toISOString();
+ for(let attempt=0;attempt<20;attempt++){
+  const bytes=crypto.getRandomValues(new Uint8Array(5)),code=Array.from(bytes,b=>alphabet[b%32]).join('');
+  if(!/[A-Z]/.test(code)||!/[2-9]/.test(code))continue;
+  const codeHash=await hash(code);
+  if(await first(db,'SELECT code_hash FROM child_codes WHERE code_hash=?',codeHash))continue;
+  try{await db.batch([db.prepare('DELETE FROM child_codes WHERE owner=? AND child_id=?').bind(owner,childId),db.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),db.prepare('INSERT INTO child_codes(code_hash,owner,child_id,expires_at,created_at) VALUES(?,?,?,?,?)').bind(codeHash,owner,childId,expiresAt,now())]);}
+  catch(error){if(await first(db,'SELECT code_hash FROM child_codes WHERE code_hash=?',codeHash))continue;throw error;}
+  return {code,expiresAt};
+ }
+ throw new HttpError(503,'No se pudo generar el código. Intenta otra vez.');
 }
 export async function makePinHash(pin){const salt=crypto.getRandomValues(new Uint8Array(16));const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:100000,hash:'SHA-256'},key,256);return Array.from(salt,b=>b.toString(16).padStart(2,'0')).join('')+':'+Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,'0')).join('');}
 async function validPin(pin,stored){const [salt,digest]=stored.split(':');const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:Uint8Array.from(salt.match(/../g),b=>parseInt(b,16)),iterations:100000,hash:'SHA-256'},key,256);const actual=Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,'0')).join('');let mismatch=0;for(let i=0;i<digest.length;i++)mismatch|=digest.charCodeAt(i)^actual.charCodeAt(i);return mismatch===0;}
