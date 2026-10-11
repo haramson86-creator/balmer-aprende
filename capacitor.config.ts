@@ -7,7 +7,6 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://balmer-aprende-pwa.balmerbs.chatgpt.site',
     cleartext: false,
-    allowNavigation: ['auth.openai.com'],
   },
   android: { backgroundColor: '#f6f4ed', allowMixedContent: false },
 };

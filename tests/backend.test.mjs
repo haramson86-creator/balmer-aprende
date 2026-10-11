@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
-import {makePinHash} from '../server/auth.mjs';
+import {makePinHash,hash} from '../server/auth.mjs';
 import {handleAPI} from '../server/backend.mjs';
 import {generatePractices,validateLesson} from '../server/practice.mjs';
 
@@ -152,6 +152,27 @@ test('family deletion removes only owned records and retries photo cleanup durab
  }finally{f.sqlite.close()}
 });
 
+
+test('Android handoff requires hosted identity, verifier, single use and parent PIN',async()=>{
+ const f=fixture();try{
+  const verifier='a'.repeat(64),challenge=await hash(verifier);
+  assert.equal((await f.request('auth/native/issue',{method:'POST',user:null,body:{challenge}})).status,401);
+  const issued=await f.request('auth/native/issue',{method:'POST',body:{challenge}});assert.equal(issued.status,200);
+  assert.notEqual(f.sqlite.prepare('SELECT ticket_hash FROM native_tickets').get().ticket_hash,issued.data.ticket);
+  assert.equal((await f.request('auth/native/redeem',{method:'POST',user:null,body:{ticket:issued.data.ticket,verifier:'b'.repeat(64)}})).status,401);
+  const redeemed=await f.request('auth/native/redeem',{method:'POST',user:null,body:{ticket:issued.data.ticket,verifier}});assert.equal(redeemed.status,200);
+  const cookie=redeemed.response.headers.get('Set-Cookie').split(';')[0];assert.match(cookie,/aprende_native=/);
+  const gate=await f.request('session',{user:null,cookie});assert.equal(gate.data.parentEmail,'family-a@example.test');assert.equal(gate.data.needsParentPin,true);
+  assert.equal((await f.request('state',{user:null,cookie})).status,403);
+  assert.equal((await f.request('auth/native/issue',{method:'POST',user:null,cookie,body:{challenge}})).status,401);
+  assert.equal((await f.request('auth/native/redeem',{method:'POST',user:null,body:{ticket:issued.data.ticket,verifier}})).status,401);
+  const setup=await f.request('auth/parent/setup',{method:'POST',user:null,cookie,body:{pin:'2468'}});assert.equal(setup.status,200);
+  const unlocked=cookie+'; '+setup.response.headers.get('Set-Cookie').split(';')[0];assert.equal((await f.request('session',{user:null,cookie:unlocked})).data.authenticated,true);
+  await f.request('auth/logout',{method:'POST',user:null,cookie:unlocked,body:{}});assert.equal((await f.request('session',{user:null,cookie:unlocked})).data.authenticated,false);
+  const expired=await f.request('auth/native/issue',{method:'POST',body:{challenge}});f.sqlite.prepare("UPDATE native_tickets SET expires_at='2000-01-01T00:00:00Z'").run();
+  assert.equal((await f.request('auth/native/redeem',{method:'POST',user:null,body:{ticket:expired.data.ticket,verifier}})).status,401);
+ }finally{f.sqlite.close()}
+});
 
 test('configured parent code is bound to trusted email and requires leaving child access',async()=>{
  const f=fixture();try{

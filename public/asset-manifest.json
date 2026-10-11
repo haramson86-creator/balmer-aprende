@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "cd7cd4994dba5016",
+  "version": "d08359c74a3b0da7",
   "assets": [
     {
       "path": "android-download.js",
@@ -124,8 +124,8 @@
     },
     {
       "path": "cloud.js",
-      "bytes": 24745,
-      "sha256": "6d61cc0e3a200a5b85f729a222dcd4087d00c5af1759572e66b5693010545699"
+      "bytes": 25729,
+      "sha256": "5fa9bb69159dbfc863629843d05f593b924490af4fcb4e1e49735da37d204472"
     },
     {
       "path": "data.js",
@@ -165,7 +165,7 @@
     {
       "path": "version.js",
       "bytes": 36,
-      "sha256": "f2712ba2a36c9ad03f70ea3f464ede4d90c382d5e59110dbe6dd8bd4b44fcf8a"
+      "sha256": "f7509eef8bd991f48da72c1435a79cf7eb005bf6691e3af00b4612e34272d221"
     }
   ]
 }

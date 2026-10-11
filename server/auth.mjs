@@ -10,7 +10,7 @@ function result(request,value,{child,parent,logout=false}={}){
  const headers=new Headers({'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
  if(child){headers.append('Set-Cookie',cookie(request,'aprende_child',child,7*86400));}
  if(parent)headers.append('Set-Cookie',cookie(request,'aprende_parent_access',parent,8*3600));
- if(logout){headers.append('Set-Cookie',cookie(request,'aprende_parent_access','',0));headers.append('Set-Cookie',cookie(request,'aprende_child','',0));}
+ if(logout){headers.append('Set-Cookie',cookie(request,'aprende_parent_access','',0));headers.append('Set-Cookie',cookie(request,'aprende_child','',0));headers.append('Set-Cookie',cookie(request,'aprende_native','',0));}
 
  return new Response(JSON.stringify(value),{headers});
 }

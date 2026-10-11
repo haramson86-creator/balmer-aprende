@@ -1,4 +1,5 @@
 import {authRoute,createChildCode,parentStatus,initialPin} from './auth.mjs';
+import {nativeAuth,nativeUser} from './native-auth.mjs';
 import {HttpError,validateLesson,validateImage,generatePractices} from './practice.mjs';
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const id=()=>crypto.randomUUID();
@@ -33,7 +34,9 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const session=await row(env.DB,'SELECT child_id FROM child_sessions WHERE token_hash=? AND expires_at>?',await sha(token),now());check(session,401,'Enlace caducado o retirado.');return json({ok:true},200,{'Set-Cookie':cookie(request,token,7*86400)});
     }
     if(path==='/api/child/exit'&&method==='POST')return json({ok:true},200,{'Set-Cookie':cookie(request,'',0)});
-    if(path.startsWith('/api/auth/')&&method==='POST'){const response=await authRoute(request,env,user,path,await bodyJSON(request),{fetcher});if(response)return response;}
+    const hostedUser=user;
+    user=await nativeUser(request,env.DB)||user;
+    if(path.startsWith('/api/auth/')&&method==='POST'){const body=await bodyJSON(request);const native=await nativeAuth(request,env,hostedUser,path,body);if(native)return native;const response=await authRoute(request,env,user,path,body,{fetcher});if(response)return response;}
     const actor=await actorFor(request,env,user);
     if(path==='/api/session'&&method==='GET'){
       if(!actor)return json({authenticated:false,aiReady:!!env.OPENAI_API_KEY,signIn:'/signin-with-chatgpt?return_to=%2F'});
