@@ -1,3 +1,7 @@
+# Version actual 0.5.2 (versionCode 13)
+
+Incluye analisis previo y segunda revision de IA, resumen de opciones, reanalisis desde fotos guardadas, historial conservado y controles visibles de audio para padres. Actualizacion disponible mediante GitHub Releases. 49 pruebas satisfactorias.
+
 # Balmer Aprende para Android
 
 Desde 0.4.2 la app consulta la última versión estable de GitHub al abrirse (como máximo una vez por hora mientras el proceso siga activo). Si encuentra una versión superior, muestra «Actualizar» y «Más tarde». En el bloque Android del Site aparece «Buscar actualizaciones» cuando se abre dentro de una APK compatible. La descarga se realiza en segundo plano; se verifican tamaño, SHA-256 de GitHub, paquete, versionCode superior y mismo certificado de firma antes de abrir el instalador. Android requiere aprobación explícita de instalación y, la primera vez, permitir instalaciones desde Aprende. No hay instalaciones silenciosas. Las APK anteriores necesitan instalar 0.4.2 manualmente una vez para incorporar este mecanismo.
