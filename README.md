@@ -1,4 +1,4 @@
-# Aprende — prototipo vertical privado
+# Aprende — prototipo vertical
 
 Versión 0.3 (ajuste responsive). Producto principal PWA; nombre provisional. Código estático modular HTML/CSS/JavaScript sin dependencias runtime externas. Las especificaciones completas prevén evolución a React/TypeScript si aporta valor; este corte ligero verifica el flujo local sin provisionar Firebase.
 
@@ -30,7 +30,7 @@ node scripts/build-manifest.mjs
 Servir dist/ mediante HTTPS u origen localhost confiable. La comprobación offline debe hacerse en el navegador real: preparar descarga, confirmar verificación, cerrar/reabrir en modo avión, completar actividades, verificar persistencia. No concluir funcionamiento offline solo por éxito de tests Node o hash.
 
 ## Seguridad del prototipo
-Fuente y opciones entran como texto escapado; no ejecutar contenido fotografiado. Límite imagen 5MB y hasta 20 por selección. Sin claves API ni Firebase públicas inventadas. Private Sites restringe acceso del sitio al propietario; esto no convierte almacenamiento del navegador en almacenamiento cifrado ni en un sistema de cuentas infantiles.
+Fuente y opciones entran como texto escapado; no ejecutar contenido fotografiado. Límite imagen 5MB y hasta 20 por selección. Sin claves API ni Firebase públicas inventadas. El acceso del Site depende de su configuración de compartir. A 11 de octubre de 2026, la configuración consultada es pública y se conserva al actualizar. Los datos introducidos siguen guardándose solo en cada navegador: no hay cuentas infantiles ni aislamiento multi-familia de producción, y el almacenamiento local no es una caja fuerte cifrada.
 
 ## Próximas puertas de aceptación
 Validación perceptual de audios; borradores recuperables; pruebas físicas Fire7/iOS; reglas multi-familia y backend idempotente real; Firebase cuenta/región/edición/facturación aprobados; IA segura con proveedor y consentimiento definidos; corpus de trazos validado con autorización.

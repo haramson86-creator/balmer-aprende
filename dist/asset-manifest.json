@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "73962d783ec8ff3e",
+  "version": "1f2413991d2ddd38",
   "assets": [
     {
       "path": "app.js",
-      "bytes": 43790,
-      "sha256": "6cd5369be47cd5bc8f3b65e189f9dc02b411022264f1ccca704da0341664d7ed"
+      "bytes": 43797,
+      "sha256": "ae65f63bf2bacc01c4c8992899391e6df0c0b6b8dd2c461052d6dd6bf9f96734"
     },
     {
       "path": "assets/audio/catalog.json",
