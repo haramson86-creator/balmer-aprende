@@ -52,6 +52,30 @@ test('photo → draft → adult approval → child execution uses persisted isol
   }finally{f.sqlite.close()}
 });
 test('missing key and rejected images do not invoke OpenAI or generate drafts',async()=>{const f=fixture();try{delete f.env.OPENAI_API_KEY;const photo=await f.upload();assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.data.id,consent:true}})).status,503);assert.equal(f.calls.length,0);const form=new FormData();form.append('consent','yes');form.append('photo',new Blob(['not an image'],{type:'image/png'}),'fake.png');assert.equal((await f.request('materials',{method:'POST',body:form})).status,400);assert.equal((await f.request('state')).data.drafts.length,0)}finally{f.sqlite.close()}});
+
+test('multiple photos keep separate references and require exact parent summary confirmation',async()=>{
+  const f=fixture();try{
+    const child=await f.profile(),otherChild=await f.profile('family-b');
+    const photos=[(await f.upload()).data,(await f.upload()).data];
+    for(const photo of photos)for(let i=0;i<2;i++)assert.equal((await f.request('generations',{method:'POST',body:{id:crypto.randomUUID(),materialId:photo.id,consent:true}})).status,201);
+    const state=(await f.request('state')).data;
+    assert.equal(state.materials.length,2);assert.ok(state.materials.every(m=>m.exerciseCount===2&&m.analysisStatus==='completed'));
+    const first=state.drafts.filter(d=>d.sourceId===photos[0].id),second=state.drafts.filter(d=>d.sourceId===photos[1].id);
+    assert.equal(first.length,2);assert.equal(second.length,2);
+    const payload={materialId:photos[0].id,childId:child.id,reviewed:true,lessons:first.map(d=>({id:d.id,revision:d.revision}))};
+    assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:{...payload,reviewed:false}})).status,400);
+    assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:{...payload,childId:otherChild.id}})).status,404);
+    assert.equal((await f.request('lessons/confirm-photo',{method:'POST',user:'family-b',body:payload})).status,404);
+    for(const lessons of [[payload.lessons[0]],[...payload.lessons,{id:second[0].id,revision:1}],[{...payload.lessons[0],revision:9},payload.lessons[1]]])assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:{...payload,lessons}})).status,409);
+    assert.equal((await f.request('state')).data.lessons.length,0);
+    const confirmed=await f.request('lessons/confirm-photo',{method:'POST',body:payload});assert.equal(confirmed.status,200);assert.equal(confirmed.data.approved,2);
+    const after=(await f.request('state')).data;assert.equal(after.lessons.length,2);assert.equal(after.drafts.length,2);assert.ok(after.lessons.every(d=>d.sourceId===photos[0].id&&d.revision===2));
+    assert.equal((await f.request('lessons/confirm-photo',{method:'POST',body:payload})).status,409);
+    assert.equal((await f.request('materials/'+photos[0].id,{method:'DELETE'})).status,409);
+    assert.equal((await f.request('materials/'+photos[0].id)).status,200);
+    assert.equal((await f.request('materials/'+photos[0].id,{user:'family-b'})).status,404);
+  }finally{f.sqlite.close()}
+});
 test('OpenAI refusal, quota, incomplete and invalid outputs remain unassigned',async()=>{
   for(const [reply,status] of [[{status:'incomplete',output:[]},422],[{status:'completed',output:[{content:[{type:'refusal',refusal:'No'}]}]},422],[{status:'completed',output:[{content:[{type:'output_text',text:'not json'}]}]},502]])await assert.rejects(()=>generatePractices({key:'test',image:new Uint8Array([1]),mime:'image/png',fetcher:async()=>Response.json(reply)}),e=>e.status===status);
   await assert.rejects(()=>generatePractices({key:'test',image:new Uint8Array([1]),mime:'image/png',fetcher:async()=>new Response('',{status:429})}),e=>e.status===429);

@@ -42,8 +42,8 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     const {owner,role,childId}=actor;
     if(path==='/api/state'&&method==='GET'){
       if(role==='child'){const lessons=await rows(env.DB,"SELECT * FROM lessons WHERE owner=? AND child_id=? AND status='approved' ORDER BY created_at DESC",owner,childId);return json({materials:[],drafts:[],lessons:lessons.map(viewLesson),attempts:[]});}
-      const [materials,lessons,attempts]=await Promise.all([rows(env.DB,'SELECT id,name,mime,bytes,created_at FROM materials WHERE owner=? ORDER BY created_at DESC LIMIT 100',owner),rows(env.DB,'SELECT * FROM lessons WHERE owner=? ORDER BY created_at DESC LIMIT 500',owner),rows(env.DB,'SELECT payload FROM attempts WHERE owner=? ORDER BY created_at DESC LIMIT 1000',owner)]);
-      return json({materials:materials.map(m=>({...m,cloud:true,size:m.bytes,url:`/api/materials/${m.id}`})),drafts:lessons.filter(l=>l.status==='draft').map(viewLesson),lessons:lessons.filter(l=>l.status==='approved').map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});
+      const [materials,lessons,attempts]=await Promise.all([rows(env.DB,"SELECT id,name,mime,bytes,created_at,COALESCE((SELECT status FROM generations g WHERE g.material_id=materials.id AND g.owner=materials.owner ORDER BY g.created_at DESC LIMIT 1),'uploaded') AS analysisStatus FROM materials WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner),rows(env.DB,'SELECT * FROM lessons WHERE owner=? ORDER BY created_at DESC LIMIT 500',owner),rows(env.DB,'SELECT payload FROM attempts WHERE owner=? ORDER BY created_at DESC LIMIT 1000',owner)]);
+      return json({materials:materials.map(m=>({...m,cloud:true,size:m.bytes,url:`/api/materials/${m.id}`,exerciseCount:lessons.filter(l=>l.material_id===m.id).length})),drafts:lessons.filter(l=>l.status==='draft').map(viewLesson),lessons:lessons.filter(l=>l.status==='approved').map(viewLesson),attempts:attempts.map(a=>JSON.parse(a.payload))});
     }
     if(path==='/api/attempts'&&method==='POST'){
       const b=await bodyJSON(request);check(typeof b.id==='string'&&/^[a-zA-Z0-9-]{16,80}$/.test(b.id),400,'Identificador de intento no válido.');
@@ -80,7 +80,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     const materialMatch=path.match(/^\/api\/materials\/([a-zA-Z0-9-]+)$/);
     if(materialMatch){const m=await row(env.DB,'SELECT * FROM materials WHERE id=? AND owner=?',materialMatch[1],owner);check(m,404,'Foto no encontrada.');
       if(method==='GET'){const object=await env.BUCKET?.get(m.object_key);check(object,404,'La foto no está disponible.');return new Response(object.body,{headers:{'Content-Type':m.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
-      if(method==='DELETE'){await env.BUCKET?.delete(m.object_key);await env.DB.batch([env.DB.prepare('DELETE FROM materials WHERE id=? AND owner=?').bind(m.id,owner),audit(env.DB,owner,'material.deleted',m.id)]);return json({ok:true});}
+      if(method==='DELETE'){check(!(await row(env.DB,'SELECT id FROM lessons WHERE material_id=? AND owner=? LIMIT 1',m.id,owner)),409,'Esta foto es la referencia de ejercicios guardados y debe conservarse.');await env.BUCKET?.delete(m.object_key);await env.DB.batch([env.DB.prepare('DELETE FROM materials WHERE id=? AND owner=?').bind(m.id,owner),audit(env.DB,owner,'material.deleted',m.id)]);return json({ok:true});}
     }
     if(path==='/api/generations'&&method==='POST'){
       check(env.OPENAI_API_KEY,503,'OpenAI aún no está configurado en el servidor.');
@@ -97,6 +97,16 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
         await env.DB.batch([...drafts.map(d=>env.DB.prepare("INSERT INTO lessons(id,owner,material_id,generation_id,status,content,revision,created_at) VALUES(?,?,?,?,'draft',?,1,?)").bind(d.id,owner,material.id,b.id,JSON.stringify(d.content),d.createdAt)),env.DB.prepare("UPDATE generations SET status='completed' WHERE id=? AND owner=?").bind(b.id,owner),audit(env.DB,owner,'practice.generated',b.id)]);
         return json({drafts:drafts.map(d=>viewLesson({id:d.id,content:JSON.stringify(d.content),status:'draft',revision:1,material_id:material.id,child_id:null,approved_at:null}))},201);
       }catch(error){await run(env.DB,"UPDATE generations SET status='failed' WHERE id=? AND owner=?",b.id,owner);throw error;}
+    }
+    if(path==='/api/lessons/confirm-photo'&&method==='POST'){
+      const b=await bodyJSON(request);check(b.reviewed===true,400,'Revisa la foto y confirma el resumen de ejercicios.');
+      check(Array.isArray(b.lessons)&&b.lessons.length>0&&b.lessons.length<=50,400,'Selecciona de 1 a 50 ejercicios para confirmar.');
+      check(await row(env.DB,'SELECT id FROM materials WHERE id=? AND owner=?',b.materialId,owner),404,'Foto no encontrada.');
+      check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',b.childId,owner),404,'Perfil no encontrado.');
+      const drafts=await rows(env.DB,"SELECT id,revision FROM lessons WHERE material_id=? AND owner=? AND status='draft'",b.materialId,owner);
+      check(new Set(b.lessons.map(l=>l.id)).size===b.lessons.length&&drafts.length===b.lessons.length&&drafts.every(d=>b.lessons.some(l=>l.id===d.id&&l.revision===d.revision)),409,'El resumen cambió. Actualiza y revisa los ejercicios antes de confirmar.');
+      const approvedAt=now();const result=await run(env.DB,"WITH reviewed AS MATERIALIZED (SELECT id,revision FROM lessons WHERE material_id=? AND owner=? AND status='draft'), valid AS MATERIALIZED (SELECT count(*) AS n FROM reviewed r WHERE EXISTS (SELECT 1 FROM json_each(?) j WHERE json_extract(j.value,'$.id')=r.id AND json_extract(j.value,'$.revision')=r.revision)) UPDATE lessons SET child_id=?,status='approved',approved_at=?,revision=revision+1 WHERE owner=? AND id IN (SELECT id FROM reviewed) AND (SELECT count(*) FROM reviewed)=? AND (SELECT n FROM valid)=?",b.materialId,owner,JSON.stringify(b.lessons),b.childId,approvedAt,owner,b.lessons.length,b.lessons.length);
+      check(result.meta.changes===drafts.length,409,'El resumen cambió durante la confirmación. Actualiza la página.');await env.DB.batch([audit(env.DB,owner,'photo.summary.confirmed',b.materialId)]);return json({approved:drafts.length,materialId:b.materialId});
     }
     const lessonMatch=path.match(/^\/api\/lessons\/([a-zA-Z0-9-]+)$/);
     if(lessonMatch&&method==='PATCH'){

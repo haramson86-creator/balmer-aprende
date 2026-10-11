@@ -1,5 +1,9 @@
 # Fotos y prácticas familiares
 
+Actualización: carga múltiple de hasta 10 fotos, con validación individual y continuación cuando una foto falla. Cada foto se registra por separado en D1/R2 y se envía como imagen de referencia en su propia solicitud a OpenAI. Se identifican hasta 20 ejercicios compatibles por foto. El resumen para padres muestra foto, consignas, opciones y respuestas; permite corregir individualmente o confirmar los borradores de una foto para asignarlos juntos. La confirmación comprueba propietario, perfil, lista exacta y revisiones, y actualiza las prácticas de esa foto en una sola operación atómica. La foto de origen se conserva mientras tenga ejercicios asociados. Los borradores persisten antes de aprobar; el niño solo recibe prácticas confirmadas. La falta de clave continúa mostrándose como análisis pendiente, sin simular resultados.
+
+El Site también incluye descarga directa de la APK 0.4.0 y compartir enlace mediante el menú del dispositivo, portapapeles o copia manual.
+
 Estado al 11 de octubre de 2026: backend implementado y base D1 local creada. La generación real con OpenAI y la publicación de esta versión están pendientes de una clave utilizable. No se afirma conexión activa con OpenAI ni base de datos de producción provisionada.
 
 ## Arquitectura y continuidad
