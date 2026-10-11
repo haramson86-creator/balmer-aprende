@@ -1,3 +1,4 @@
+import {authRoute,createChildCode} from './auth.mjs';
 import {HttpError,validateLesson,validateImage,generatePractices} from './practice.mjs';
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 const id=()=>crypto.randomUUID();
@@ -32,6 +33,7 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
       const session=await row(env.DB,'SELECT child_id FROM child_sessions WHERE token_hash=? AND expires_at>?',await sha(token),now());check(session,401,'Enlace caducado o retirado.');return json({ok:true},200,{'Set-Cookie':cookie(request,token,7*86400)});
     }
     if(path==='/api/child/exit'&&method==='POST')return json({ok:true},200,{'Set-Cookie':cookie(request,'',0)});
+    if(path.startsWith('/api/auth/')&&method==='POST'){const response=await authRoute(request,env,user,path,await bodyJSON(request),{fetcher});if(response)return response;}
     const actor=await actorFor(request,env,user);
     if(path==='/api/session'&&method==='GET'){
       if(!actor)return json({authenticated:false,aiReady:!!env.OPENAI_API_KEY,signIn:'/signin-with-chatgpt?return_to=%2F'});
@@ -64,14 +66,17 @@ export async function handleAPI(request,env,user,{fetcher=fetch}={}){
     }
     if(path==='/api/profiles'&&method==='POST'){
       const {name}=await bodyJSON(request);check(typeof name==='string'&&name.trim().length>=1&&name.trim().length<=40,400,'Escribe un apodo de hasta 40 caracteres.');
-      const count=await row(env.DB,'SELECT count(*) AS n FROM profiles WHERE owner=?',owner);check(count.n<10,409,'Puedes crear hasta 10 perfiles.');const profile={id:id(),name:name.trim()};await env.DB.batch([env.DB.prepare('INSERT INTO profiles(id,owner,name,created_at) VALUES(?,?,?,?)').bind(profile.id,owner,profile.name,now()),audit(env.DB,owner,'profile.created',profile.id)]);return json(profile,201);
+      const count=await row(env.DB,'SELECT count(*) AS n FROM profiles WHERE owner=?',owner);check(count.n<10,409,'Puedes crear hasta 10 perfiles.');const profile={id:id(),name:name.trim()};await env.DB.batch([env.DB.prepare('INSERT INTO profiles(id,owner,name,created_at) VALUES(?,?,?,?)').bind(profile.id,owner,profile.name,now()),audit(env.DB,owner,'profile.created',profile.id)]);return json({...profile,...await createChildCode(env.DB,owner,profile.id)},201);
+    }
+    if(path==='/api/child/codes'&&method==='POST'){
+      const {childId}=await bodyJSON(request);check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',childId,owner),404,'Perfil no encontrado.');return json(await createChildCode(env.DB,owner,childId),201);
     }
     if(path==='/api/child/links'&&method==='POST'){
       const {childId}=await bodyJSON(request);check(await row(env.DB,'SELECT id FROM profiles WHERE id=? AND owner=?',childId,owner),404,'Perfil no encontrado.');
       const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join(''),expires=new Date(Date.now()+7*86400000).toISOString();
       await env.DB.batch([env.DB.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),env.DB.prepare('INSERT INTO child_sessions(token_hash,owner,child_id,expires_at,created_at) VALUES(?,?,?,?,?)').bind(await sha(token),owner,childId,expires,now()),audit(env.DB,owner,'child.link.created',childId)]);return json({url:`${url.origin}/#child=${token}`,expiresAt:expires},201);
     }
-    if(path==='/api/child/links'&&method==='DELETE'){const {childId}=await bodyJSON(request);await run(env.DB,'DELETE FROM child_sessions WHERE owner=? AND child_id=?',owner,childId);return json({ok:true});}
+    if(path==='/api/child/links'&&method==='DELETE'){const {childId}=await bodyJSON(request);await env.DB.batch([env.DB.prepare('DELETE FROM child_sessions WHERE owner=? AND child_id=?').bind(owner,childId),env.DB.prepare('DELETE FROM child_codes WHERE owner=? AND child_id=?').bind(owner,childId)]);return json({ok:true});}
     if(path==='/api/materials'&&method==='POST'){
       check(env.BUCKET,503,'El almacenamiento de fotos aún no está configurado.');
       const quota=await row(env.DB,'SELECT count(*) AS n FROM materials WHERE owner=?',owner);check(quota.n<100,429,'Límite de 100 fotos alcanzado. Retira una foto antes de añadir otra.');

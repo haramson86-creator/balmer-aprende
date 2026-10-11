@@ -8,3 +8,6 @@ export const childSessions = sqliteTable('child_sessions', {tokenHash:text('toke
 export const audit = sqliteTable('audit', {id:text('id').primaryKey(),owner:text('owner').notNull(),action:text('action').notNull(),entityId:text('entity_id').notNull(),createdAt:text('created_at').notNull()});
 
 export const families = sqliteTable('families', {owner:text('owner').primaryKey(),name:text('name').notNull(),createdAt:text('created_at').notNull()});
+
+export const childCodes = sqliteTable('child_codes', {codeHash:text('code_hash').primaryKey(),owner:text('owner').notNull(),childId:text('child_id').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull()},t=>[index('child_codes_owner_child').on(t.owner,t.childId)]);
+export const authLimits = sqliteTable('auth_limits', {key:text('key').primaryKey(),count:integer('count').notNull(),expiresAt:text('expires_at').notNull()});

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "eaf8c5dd2f5cb7b4",
+  "version": "ac3fd3f5ae3ddc89",
   "assets": [
     {
       "path": "android-download.js",
@@ -9,8 +9,8 @@
     },
     {
       "path": "app.js",
-      "bytes": 44932,
-      "sha256": "033f78bf2c7ddcca35aebc652d1c5df20ab742587a62dd7310687de1e9b828ec"
+      "bytes": 45221,
+      "sha256": "3cb14cbf9ca6a29e7b033533dd6faf5f71e0bb9b842594d699ed9809abe2f0af"
     },
     {
       "path": "assets/audio/catalog.json",
@@ -124,8 +124,8 @@
     },
     {
       "path": "cloud.js",
-      "bytes": 19088,
-      "sha256": "746adae84611740a650ee16d5b1b340624a3ca2cbf16124c13d224515ed3855e"
+      "bytes": 20447,
+      "sha256": "26d8a414cfbca8291e74b91afc96e1cc6e685ca1a19e83c06045f7affec6152d"
     },
     {
       "path": "data.js",

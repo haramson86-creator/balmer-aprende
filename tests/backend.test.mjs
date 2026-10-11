@@ -8,7 +8,7 @@ import {generatePractices,validateLesson} from '../server/practice.mjs';
 const exercise={type:'select',title:'Encuentra la M',prompt:'¿Cuál es la letra M?',options:['M','L','S'],answer:'M',category:'source',skill:'Reconocer letras'};
 function fixture(){
   const sqlite=new DatabaseSync(':memory:');sqlite.exec(fs.readFileSync(new URL('../drizzle/0000_glorious_karen_page.sql',import.meta.url),'utf8'));
-  sqlite.exec('CREATE TABLE families(owner TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL)');
+  for(const name of fs.readdirSync(new URL('../drizzle/',import.meta.url)).filter(n=>n.endsWith('.sql')&&!n.startsWith('0000')).sort())sqlite.exec(fs.readFileSync(new URL('../drizzle/'+name,import.meta.url),'utf8'));
   const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){const result=sqlite.prepare(sql).run(...args);return {meta:{changes:Number(result.changes)}}}}},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results}catch(e){sqlite.exec('ROLLBACK');throw e}}};
   const objects=new Map();const BUCKET={async put(key,bytes){objects.set(key,bytes)},async get(key){const bytes=objects.get(key);return bytes?{body:bytes,arrayBuffer:async()=>bytes}:null},async delete(key){objects.delete(key)}};
   const env={DB,BUCKET,OPENAI_API_KEY:'test-only-not-a-real-key'},calls=[];
@@ -90,5 +90,27 @@ test('family setup persists per owner and requires a parent',async()=>{
   assert.equal((await f.request('session',{user:'family-b'})).data.family,null);
   assert.equal((await f.request('family',{method:'PUT',body:{name:' '}})).status,400);
   assert.equal((await f.request('family',{method:'PUT',user:null,body:{name:'Otra'}})).status,401);
+ }finally{f.sqlite.close()}
+});
+
+test('child codes bind to one family and child, rotate and revoke all prior access',async()=>{
+ const f=fixture();try{
+  const child=await f.profile();assert.match(child.code,/^[A-Z2-9]{4}(-[A-Z2-9]{4}){2}$/);
+  const login=await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}});assert.equal(login.status,200);assert.equal(login.data.role,'child');
+  const cookie=login.response.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await f.request('session',{user:null,cookie})).data.profiles[0].id,child.id);
+  assert.equal((await f.request('family',{method:'PUT',cookie,user:null,body:{name:'Prohibida'}})).status,403);
+  assert.equal((await f.request('child/codes',{method:'POST',cookie,user:null,body:{childId:child.id}})).status,403);
+  assert.equal((await f.request('child/codes',{method:'POST',user:'family-b',body:{childId:child.id}})).status,404);
+  const rotated=await f.request('child/codes',{method:'POST',body:{childId:child.id}});assert.equal(rotated.status,201);
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:child.code}})).status,401);
+  assert.equal((await f.request('session',{user:null,cookie})).status,401);
+  await f.request('child/links',{method:'DELETE',body:{childId:child.id}});
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:rotated.data.code}})).status,401);
+  const third=await f.request('child/codes',{method:'POST',body:{childId:child.id}});
+  f.sqlite.prepare('UPDATE child_codes SET expires_at=?').run('2000-01-01');
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:third.data.code}})).status,401);
+  for(let i=0;i<10;i++)await f.request('auth/child',{method:'POST',user:null,body:{code:'AAAA-BBBB-CCCC'}});
+  assert.equal((await f.request('auth/child',{method:'POST',user:null,body:{code:'AAAA-BBBB-CCCC'}})).status,429);
  }finally{f.sqlite.close()}
 });
