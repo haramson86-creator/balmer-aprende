@@ -1,5 +1,5 @@
 let current=null;let revoke=null;let voiceRun=0;
-export function stopVoice(){voiceRun++;if(current){current.pause();current.currentTime=0;current=null}if(revoke){URL.revokeObjectURL(revoke);revoke=null}window.speechSynthesis?.cancel()}
+export function stopVoice(){voiceRun++;if(current){current.pause();current.currentTime=0;current.hidden=true;current.removeAttribute('src');current.load?.();current=null}if(revoke){URL.revokeObjectURL(revoke);revoke=null}window.speechSynthesis?.cancel()}
 export async function playVoice(source,player=null){stopVoice();const url=source instanceof Blob?(revoke=URL.createObjectURL(source)):source;current=player||new Audio();current.hidden=false;current.src=url;current.volume=.85;await current.play()}
 export function hasBundledVoice(activity){return !!activity.audio||activity.audioBlob instanceof Blob}
 const voiceCache=new Map();let cacheEpoch=0;
